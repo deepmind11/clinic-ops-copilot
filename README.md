@@ -61,18 +61,18 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design decisions.
 
 ## The Three Agents (Phase 1)
 
-| Agent | Role | Tool Calls |
-|-------|------|------------|
-| **Scheduler** | Books, reschedules, cancels appointments. Handles double-bookings, slot conflicts, provider availability. | `find_open_slots`, `book_appointment`, `cancel_appointment`, `lookup_patient` |
-| **Eligibility** | Checks insurance coverage status from FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
-| **Triage** | Routes new patient intents to the right downstream agent or human. Handles Spanish code-switching. | `classify_intent`, `route_to_agent`, `escalate_to_human` |
+| Agent | Status | Role | Tool Calls |
+|-------|--------|------|------------|
+| **Scheduler** | shipped | Books, reschedules, cancels appointments. Handles double-bookings, slot conflicts, provider availability. | `find_open_slots`, `book_appointment`, `cancel_appointment`, `lookup_patient` |
+| **Eligibility** | building | Checks insurance coverage status from FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
+| **Triage** | building | Routes new patient intents to the right downstream agent or human. Handles Spanish code-switching. | `classify_intent`, `route_to_agent`, `escalate_to_human` |
 
 A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.md).
 
 ## Tech Stack
 
 - **Language:** Python 3.11+
-- **Agent framework:** Claude Agent SDK (Anthropic official multi-agent SDK)
+- **Agent framework:** Anthropic Python SDK with a custom tool-use loop (no LangChain, no LlamaIndex, no abstraction tax)
 - **Web layer:** FastAPI
 - **Data layer:** PostgreSQL with FHIR R4 schema via `fhir.resources` Pydantic models
 - **Synthetic data:** [Synthea](https://github.com/synthetichealth/synthea) (open-source synthetic patient generator)
@@ -145,11 +145,11 @@ The dashboard surfaces:
 
 This project is structured to mirror the FDE week-one playbook:
 
-1. **Discovery scripts** (`scripts/discovery/`) — query the customer's existing systems for data shape and volume
-2. **Migration pipeline** (`scripts/migrate.py`) — load legacy data into the platform
-3. **Agent configuration** (`src/clinic_ops_copilot/agents/`) — tune prompts and tool surfaces per customer
-4. **Observability baseline** (`src/clinic_ops_copilot/observability/`) — instrument every tool call from day one
-5. **Eval harness** (`evals/`) — golden tests that block deploy if accuracy regresses
+1. **Discovery scripts** (`scripts/discovery/`) -- query the customer's existing systems for data shape and volume
+2. **Migration pipeline** (`scripts/migrate.py`) -- load legacy data into the platform
+3. **Agent configuration** (`src/clinic_ops_copilot/agents/`) -- tune prompts and tool surfaces per customer
+4. **Observability baseline** (`src/clinic_ops_copilot/observability/`) -- instrument every tool call from day one
+5. **Eval harness** (`evals/`) -- golden tests that block deploy if accuracy regresses
 
 That is the FDE mindset on display in code.
 
@@ -157,9 +157,9 @@ That is the FDE mindset on display in code.
 
 - **Multi-tenant row-level security** with Postgres RLS so multiple clinics can share infra safely
 - **Real EHR integration** via [OpenEMR](https://www.open-emr.org/) FHIR API or a Mirth Connect integration channel
-- **Eval harness on production traces** — replay real anonymized customer traffic against new prompts before promotion
-- **Latency-aware routing** — fall back to a cheaper model for high-confidence intents
-- **PHI redaction layer** — Presidio or a custom NER model in front of every prompt
+- **Eval harness on production traces** -- replay real anonymized customer traffic against new prompts before promotion
+- **Latency-aware routing** -- fall back to a cheaper model for high-confidence intents
+- **PHI redaction layer** -- Presidio or a custom NER model in front of every prompt
 
 ## Project Structure
 

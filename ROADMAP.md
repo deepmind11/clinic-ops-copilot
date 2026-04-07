@@ -1,29 +1,30 @@
 # Roadmap
 
-## Phase 1 — v0.1 (in progress, 2026-04-07)
+## Phase 1 -- v0.1 (in progress, 2026-04-07)
 
 The minimum viable artifact a Forward Deployed Engineer would bring to a customer on day one.
 
 - [x] Repo scaffold + project structure
-- [x] README, ARCHITECTURE.md, ROADMAP.md
-- [ ] `pyproject.toml` with uv, Ruff, Pyright, pytest
-- [ ] Docker Compose for local Postgres
-- [ ] FHIR R4 Pydantic models (Patient, Appointment, Coverage, Claim, Practitioner)
-- [ ] Synthea integration script (`scripts/generate_synthea.py`)
-- [ ] Migration script (`scripts/migrate.py`) loading Synthea output into Postgres
-- [ ] Tool surfaces wrapping Postgres queries
-- [ ] Scheduler agent (Claude Agent SDK)
-- [ ] Eligibility agent
-- [ ] Triage agent (with Spanish code-switching support)
-- [ ] FastAPI gateway with one POST endpoint per agent
-- [ ] Events store (SQLite) with structured logging on every tool call
+- [x] README, ARCHITECTURE.md, ROADMAP.md, QUICKSTART.md
+- [x] `pyproject.toml` with uv, Ruff, Pyright, pytest
+- [x] Docker Compose for local Postgres
+- [x] Postgres schema (FHIR R4 subset: Patient, Appointment, Coverage, Claim, Practitioner, ProviderSlot)
+- [x] Synthetic FHIR data generator (`scripts/seed.py`) using Faker + fhir.resources Pydantic models
+- [x] Storage layer: psycopg connection helpers, raw-SQL query module
+- [x] Events store (SQLite) with structured logging
+- [x] Tool surfaces for Scheduler agent
+- [x] Scheduler agent (Anthropic SDK with tool-use loop, full observability)
+- [x] FastAPI gateway with `/agents/scheduler` endpoint
+- [x] CLI (`clinicops seed`, `clinicops serve`, `clinicops logs`, `clinicops healthcheck`)
+- [x] Smoke tests passing (6/6)
+- [x] GitHub Actions: lint, format, type check, pytest
+- [ ] Eligibility agent (tools + agent + endpoint)
+- [ ] Triage agent (tools + agent + endpoint, with Spanish code-switching support)
 - [ ] Streamlit observability dashboard
-- [ ] CLI (`clinicops seed`, `clinicops serve`, `clinicops dashboard`, `clinicops eval`, `clinicops logs`)
 - [ ] Eval harness with 20 golden test cases
-- [ ] GitHub Actions: lint, type check, pytest, eval harness on every PR
-- [ ] README polish + Loom demo recording
+- [ ] Loom demo recording
 
-## Phase 2 — v0.2
+## Phase 2 -- v0.2
 
 Differentiation layer. Ships after v0.1 lands.
 
@@ -33,7 +34,7 @@ Differentiation layer. Ships after v0.1 lands.
 - [ ] Loom demo with the live URL
 - [ ] Per-customer config layer (one config file per "tenant")
 
-## Phase 3 — Stretch
+## Phase 3 -- Stretch
 
 The "what I would do with more time" list, kept here so reviewers can see the long-range plan.
 

@@ -9,7 +9,7 @@ ClinicOps Copilot is designed to be the artifact a Forward Deployed Engineer wou
 3. **A CLI a customer's IT team can run.** Not a Jupyter notebook demo.
 4. **Eval harness blocks promotion.** Correctness is provable, not aspirational.
 5. **Infrastructure as code.** Terraform module ships with v0.2.
-6. **Pragmatic dependencies.** Synthea, Claude Agent SDK, Postgres, Streamlit. No exotic tools.
+6. **Pragmatic dependencies.** Anthropic SDK, Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
 
 ## Component Map
 
@@ -17,11 +17,11 @@ ClinicOps Copilot is designed to be the artifact a Forward Deployed Engineer wou
 
 The single entry point a customer-facing engineer uses on the ground. Subcommands:
 
-- `clinicops seed --patients N` — generate synthetic patients via Synthea, load into Postgres
-- `clinicops serve` — start the FastAPI gateway and the agents
-- `clinicops dashboard` — open the Streamlit observability dashboard
-- `clinicops eval` — run the 20 golden test cases, write pass/fail to events store
-- `clinicops logs --agent scheduler --since 1h` — tail recent agent decisions
+- `clinicops seed --patients N` -- generate synthetic patients via Synthea, load into Postgres
+- `clinicops serve` -- start the FastAPI gateway and the agents
+- `clinicops dashboard` -- open the Streamlit observability dashboard
+- `clinicops eval` -- run the 20 golden test cases, write pass/fail to events store
+- `clinicops logs --agent scheduler --since 1h` -- tail recent agent decisions
 
 The CLI is built with Typer for ergonomics and tab completion.
 
@@ -29,13 +29,13 @@ The CLI is built with Typer for ergonomics and tab completion.
 
 A thin HTTP layer in front of the agents. One POST endpoint per agent:
 
-- `POST /agents/scheduler` — `{ "intent": "book a cleaning next Tuesday at 2pm" }`
-- `POST /agents/eligibility` — `{ "patient_id": "...", "service_code": "D1110" }`
-- `POST /agents/triage` — `{ "intent": "tengo dolor de muelas y necesito ver al dentista hoy" }`
+- `POST /agents/scheduler` -- `{ "intent": "book a cleaning next Tuesday at 2pm" }`
+- `POST /agents/eligibility` -- `{ "patient_id": "...", "service_code": "D1110" }`
+- `POST /agents/triage` -- `{ "intent": "tengo dolor de muelas y necesito ver al dentista hoy" }`
 
 Each request is assigned a `trace_id` that propagates through every tool call and lands in the events store.
 
-### Agents (Claude Agent SDK)
+### Agents (Anthropic SDK with custom tool-use loop)
 
 Three agents in v0.1, each with its own prompt, tool surface, and structured output schema:
 
@@ -116,7 +116,7 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 
 | Dependency | Why |
 |-----------|-----|
-| Claude Agent SDK | Anthropic official multi-agent framework. Signals current tooling, not legacy LangChain |
+| anthropic SDK | Stable, well-documented tool-use loop. Direct SDK gives full control over observability instrumentation, no framework abstraction tax |
 | FastAPI | Async-first, type-safe, Pydantic-native, ubiquitous in modern Python |
 | Postgres | Industry standard for healthcare. JSONB makes FHIR storage clean |
 | `fhir.resources` | Official Pydantic models for FHIR R4. Saves weeks of schema work |
@@ -130,7 +130,7 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 ## What Is Deliberately Not Here
 
 - **No vector database.** Agents use structured tool calls, not RAG. Healthcare ops decisions need to be auditable, and vector retrieval is opaque.
-- **No LangChain or LlamaIndex.** Claude Agent SDK is the right level of abstraction for this use case.
+- **No LangChain or LlamaIndex.** The anthropic SDK is the right level of abstraction here. Higher-level frameworks add indirection that gets in the way of clean observability and break when their internal APIs churn.
 - **No ORM in the hot path.** SQLAlchemy adds latency and indirection. Raw SQL is clearer.
 - **No frontend framework beyond Streamlit.** Time better spent on agent quality and observability.
 - **No Kubernetes.** Lambda + RDS is the right granularity for a single-tenant clinic deployment in v0.2.
