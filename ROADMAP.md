@@ -18,10 +18,10 @@ The minimum viable artifact a Forward Deployed Engineer would bring to a custome
 - [x] CLI (`clinicops seed`, `clinicops serve`, `clinicops logs`, `clinicops healthcheck`)
 - [x] Smoke tests passing (6/6)
 - [x] GitHub Actions: lint, format, type check, pytest
-- [ ] Eligibility agent (tools + agent + endpoint)
-- [ ] Triage agent (tools + agent + endpoint, with Spanish code-switching support)
-- [ ] Streamlit observability dashboard
-- [ ] Eval harness with 20 golden test cases
+- [x] Eligibility agent (tools + agent + endpoint)
+- [x] Triage agent (tools + agent + endpoint, with Spanish code-switching support)
+- [x] Streamlit observability dashboard
+- [x] Eval harness with 20 golden test cases
 - [ ] Loom demo recording
 
 ## Phase 2 -- v0.2

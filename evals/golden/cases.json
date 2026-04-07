@@ -1,0 +1,181 @@
+{
+  "version": 1,
+  "description": "ClinicOps Copilot v0.1 golden eval suite. 20 cases covering scheduling, eligibility, triage, multilingual code-switching, and failure modes.",
+  "cases": [
+    {
+      "id": "sched-01",
+      "tags": ["scheduling"],
+      "mode": "agent",
+      "agent": "scheduler",
+      "input": "I need to book a cleaning tomorrow at 10am for Maria Lopez.",
+      "expected": {
+        "tool_calls_any_of": ["lookup_patient", "find_open_slots"],
+        "final_text_should_not_contain": ["error", "I cannot"]
+      }
+    },
+    {
+      "id": "sched-02",
+      "tags": ["scheduling"],
+      "mode": "agent",
+      "agent": "scheduler",
+      "input": "Cancel my appointment please. My phone is +14155551234.",
+      "expected": {
+        "tool_calls_any_of": ["lookup_patient"],
+        "final_text_should_not_contain": ["error"]
+      }
+    },
+    {
+      "id": "sched-03",
+      "tags": ["scheduling"],
+      "mode": "agent",
+      "agent": "scheduler",
+      "input": "Can you reschedule my cleaning to next week?",
+      "expected": {
+        "tool_calls_any_of": ["lookup_patient", "find_open_slots"]
+      }
+    },
+    {
+      "id": "sched-04",
+      "tags": ["scheduling", "edge_case"],
+      "mode": "agent",
+      "agent": "scheduler",
+      "input": "Find me any open slot for a checkup with any dentist this week.",
+      "expected": {
+        "tool_calls_any_of": ["find_open_slots"]
+      }
+    },
+    {
+      "id": "sched-05",
+      "tags": ["scheduling", "urgency"],
+      "mode": "agent",
+      "agent": "scheduler",
+      "input": "I need to see someone today, any provider works.",
+      "expected": {
+        "tool_calls_any_of": ["find_open_slots"]
+      }
+    },
+    {
+      "id": "elig-01",
+      "tags": ["eligibility"],
+      "mode": "deterministic",
+      "tool": "get_payor_rules",
+      "input": {"payor": "Aetna", "service_code": "D1110"},
+      "expected": {"covered": true, "prior_auth_required": false}
+    },
+    {
+      "id": "elig-02",
+      "tags": ["eligibility", "edge_case"],
+      "mode": "deterministic",
+      "tool": "get_payor_rules",
+      "input": {"payor": "Cigna", "service_code": "D9230"},
+      "expected": {"covered": false, "reason_contains": "excluded"}
+    },
+    {
+      "id": "elig-03",
+      "tags": ["eligibility", "edge_case"],
+      "mode": "deterministic",
+      "tool": "get_payor_rules",
+      "input": {"payor": "Blue Cross", "service_code": "D7140"},
+      "expected": {"covered": true, "prior_auth_required": true}
+    },
+    {
+      "id": "elig-04",
+      "tags": ["eligibility", "edge_case"],
+      "mode": "deterministic",
+      "tool": "get_payor_rules",
+      "input": {"payor": "Medicare", "service_code": "D1110"},
+      "expected": {"covered": false}
+    },
+    {
+      "id": "elig-05",
+      "tags": ["eligibility", "failure_mode"],
+      "mode": "deterministic",
+      "tool": "get_payor_rules",
+      "input": {"payor": "RandomPayor", "service_code": "D1110"},
+      "expected": {"known_payor": false, "covered": false}
+    },
+    {
+      "id": "triage-01",
+      "tags": ["triage"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "I need to book an appointment for a cleaning tomorrow"},
+      "expected": {"top_class": "scheduling", "language": "en"}
+    },
+    {
+      "id": "triage-02",
+      "tags": ["triage", "multilingual"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "Necesito agendar una cita para una limpieza mañana"},
+      "expected": {"top_class": "scheduling", "language": "es"}
+    },
+    {
+      "id": "triage-03",
+      "tags": ["triage", "multilingual", "code_switch"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "tengo dolor de muelas and I need to see the dentist hoy"},
+      "expected": {"top_class_in": ["scheduling", "escalation"]}
+    },
+    {
+      "id": "triage-04",
+      "tags": ["triage"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "How much do I owe on my last bill?"},
+      "expected": {"top_class": "billing", "language": "en"}
+    },
+    {
+      "id": "triage-05",
+      "tags": ["triage", "multilingual"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "Quiero saber si mi seguro cubre la limpieza"},
+      "expected": {"top_class_in": ["eligibility", "scheduling"], "language": "es"}
+    },
+    {
+      "id": "triage-06",
+      "tags": ["triage", "multilingual", "code_switch"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "what does mi seguro cover for a cleaning"},
+      "expected": {"top_class": "eligibility"}
+    },
+    {
+      "id": "triage-07",
+      "tags": ["triage", "urgency"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "I have severe pain and bleeding from my gums"},
+      "expected": {"top_class": "escalation", "language": "en"}
+    },
+    {
+      "id": "triage-08",
+      "tags": ["triage", "urgency", "multilingual"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "Tengo dolor severo y sangrado, es una emergencia"},
+      "expected": {"top_class": "escalation", "language": "es"}
+    },
+    {
+      "id": "triage-09",
+      "tags": ["triage", "failure_mode"],
+      "mode": "deterministic",
+      "tool": "classify_intent",
+      "input": {"text": "hello"},
+      "expected": {"confidence_in": ["none", "low"]}
+    },
+    {
+      "id": "triage-10",
+      "tags": ["triage", "agent", "multilingual"],
+      "mode": "agent",
+      "agent": "triage",
+      "input": "tengo dolor de muelas and I need to see the dentist hoy",
+      "expected": {
+        "tool_calls_any_of": ["classify_intent"],
+        "final_text_should_not_contain": ["error"]
+      }
+    }
+  ]
+}

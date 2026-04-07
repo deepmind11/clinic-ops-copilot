@@ -64,8 +64,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design decisions.
 | Agent | Status | Role | Tool Calls |
 |-------|--------|------|------------|
 | **Scheduler** | shipped | Books, reschedules, cancels appointments. Handles double-bookings, slot conflicts, provider availability. | `find_open_slots`, `book_appointment`, `cancel_appointment`, `lookup_patient` |
-| **Eligibility** | building | Checks insurance coverage status from FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
-| **Triage** | building | Routes new patient intents to the right downstream agent or human. Handles Spanish code-switching. | `classify_intent`, `route_to_agent`, `escalate_to_human` |
+| **Eligibility** | shipped | Checks insurance coverage status from FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
+| **Triage** | shipped | Routes new patient intents to the right downstream agent or human. Handles Spanish code-switching. | `classify_intent`, `route_to_agent`, `escalate_to_human` |
 
 A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.md).
 

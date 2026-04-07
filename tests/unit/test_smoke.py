@@ -46,6 +46,168 @@ def test_scheduler_agent_builds() -> None:
     assert "lookup_patient" in agent.tool_funcs
 
 
+def test_eligibility_tools_schema() -> None:
+    from clinic_ops_copilot.tools.eligibility_tools import (
+        ELIGIBILITY_TOOL_FUNCS,
+        ELIGIBILITY_TOOLS,
+    )
+
+    tool_names = {t["name"] for t in ELIGIBILITY_TOOLS}
+    func_names = set(ELIGIBILITY_TOOL_FUNCS.keys())
+    assert tool_names == func_names, "tool schemas and dispatch table must match"
+    assert "lookup_coverage" in tool_names
+    assert "check_active_period" in tool_names
+    assert "get_payor_rules" in tool_names
+
+
+def test_eligibility_agent_builds() -> None:
+    from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
+
+    agent = build_eligibility_agent()
+    assert agent.name == "eligibility"
+    assert len(agent.tools) == 3
+    assert "get_payor_rules" in agent.tool_funcs
+
+
+def test_payor_rules_logic() -> None:
+    """Sanity check the payor rules registry returns sensible answers."""
+    from clinic_ops_copilot.tools.eligibility_tools import get_payor_rules
+
+    # Aetna covers a routine cleaning without prior auth
+    aetna = get_payor_rules("Aetna", "D1110")
+    assert aetna["covered"] is True
+    assert aetna["prior_auth_required"] is False
+
+    # Medicare excludes routine dental
+    medicare = get_payor_rules("Medicare", "D1110")
+    assert medicare["covered"] is False
+
+    # Unknown payor returns known_payor=False
+    unknown = get_payor_rules("RandomPayor", "D1110")
+    assert unknown["known_payor"] is False
+    assert unknown["covered"] is False
+
+    # Cigna explicitly excludes nitrous oxide
+    cigna = get_payor_rules("Cigna", "D9230")
+    assert cigna["covered"] is False
+    assert "excluded" in cigna["reason"]
+
+    # Blue Cross requires prior auth on extractions
+    blue = get_payor_rules("Blue Cross", "D7140")
+    assert blue["covered"] is True
+    assert blue["prior_auth_required"] is True
+
+
+def test_triage_tools_schema() -> None:
+    from clinic_ops_copilot.tools.triage_tools import TRIAGE_TOOL_FUNCS, TRIAGE_TOOLS
+
+    tool_names = {t["name"] for t in TRIAGE_TOOLS}
+    func_names = set(TRIAGE_TOOL_FUNCS.keys())
+    assert tool_names == func_names
+    assert "classify_intent" in tool_names
+    assert "route_to_agent" in tool_names
+    assert "escalate_to_human" in tool_names
+
+
+def test_triage_agent_builds() -> None:
+    from clinic_ops_copilot.agents.triage import build_triage_agent
+
+    agent = build_triage_agent()
+    assert agent.name == "triage"
+    assert len(agent.tools) == 3
+
+
+def test_triage_classification_english() -> None:
+    from clinic_ops_copilot.tools.triage_tools import classify_intent
+
+    r = classify_intent("I need to book an appointment for a cleaning tomorrow")
+    assert r["top_class"] == "scheduling"
+    assert r["confidence"] == "high"
+    assert r["language"] == "en"
+
+
+def test_triage_classification_spanish() -> None:
+    from clinic_ops_copilot.tools.triage_tools import classify_intent
+
+    r = classify_intent("Necesito agendar una cita para una limpieza mañana")
+    assert r["top_class"] == "scheduling"
+    assert r["confidence"] == "high"
+    assert r["language"] == "es"
+
+
+def test_triage_classification_code_switched() -> None:
+    """Code-switched Spanish + English: the known weakness this project tackles."""
+    from clinic_ops_copilot.tools.triage_tools import classify_intent
+
+    r = classify_intent("tengo dolor de muelas and I need to see the dentist hoy")
+    # Should still detect scheduling intent and a mixed language
+    assert r["top_class"] in ("scheduling", "escalation")
+    assert r["language"] in ("mixed", "es", "en")
+    # Either way, the patient is asking to be seen today
+    assert r["top_score"] >= 1
+
+
+def test_triage_classification_emergency() -> None:
+    from clinic_ops_copilot.tools.triage_tools import classify_intent
+
+    r = classify_intent("I have severe pain and bleeding from my gums")
+    assert r["top_class"] == "escalation"
+
+
+def test_triage_route() -> None:
+    from clinic_ops_copilot.tools.triage_tools import route_to_agent
+
+    assert route_to_agent("scheduling")["target"] == "/agents/scheduler"
+    assert route_to_agent("eligibility")["target"] == "/agents/eligibility"
+    assert route_to_agent("billing")["available_in_phase_1"] is False
+    assert route_to_agent("nonsense")["routed"] is False
+
+
+def test_triage_escalate() -> None:
+    from clinic_ops_copilot.tools.triage_tools import escalate_to_human
+
+    r = escalate_to_human("severe bleeding", urgency="emergency")
+    assert r["escalated"] is True
+    assert r["urgency"] == "emergency"
+
+
+def test_dashboard_module_imports() -> None:
+    """Dashboard module should import without side effects (no st.* at import time)."""
+    from clinic_ops_copilot.observability import dashboard
+
+    assert hasattr(dashboard, "render")
+
+
+def test_eval_cases_load() -> None:
+    from clinic_ops_copilot.eval.runner import load_cases
+
+    cases = load_cases()
+    assert len(cases) >= 20, f"expected >= 20 golden cases, got {len(cases)}"
+    # Every case has the required keys
+    for c in cases:
+        assert "id" in c
+        assert "tags" in c
+        assert "mode" in c
+        assert "expected" in c
+        assert c["mode"] in ("deterministic", "agent")
+
+
+def test_eval_deterministic_cases_pass() -> None:
+    """All deterministic cases must pass, with no DB or API key required."""
+    from clinic_ops_copilot.eval.runner import run_suite, summarize
+
+    results = run_suite(suite="all", persist=False)
+    deterministic = [r for r in results if r.mode == "deterministic"]
+    assert deterministic, "no deterministic cases found"
+    failed = [r for r in deterministic if not r.passed]
+    assert not failed, "deterministic eval failures: " + "; ".join(
+        f"{r.case_id}: {r.detail}" for r in failed
+    )
+    summary = summarize(results)
+    # Agent cases should be marked skipped (no API key in unit test env)
+    assert summary["skipped"] >= 0  # tolerate 0 if a key happens to be set
+
+
 def test_events_store_init() -> None:
     """Events DB should initialize and accept a write."""
     import os

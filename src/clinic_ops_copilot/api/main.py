@@ -10,7 +10,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
 from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+from clinic_ops_copilot.agents.triage import build_triage_agent
 from clinic_ops_copilot.observability.tracing import configure_logging, new_trace_id
 from clinic_ops_copilot.storage.database import healthcheck as db_healthcheck
 from clinic_ops_copilot.storage.events import init_events_db
@@ -26,6 +28,8 @@ app = FastAPI(
 
 # Build agents at module load so each request reuses the warm Anthropic client
 _scheduler = build_scheduler_agent()
+_eligibility = build_eligibility_agent()
+_triage = build_triage_agent()
 
 
 class AgentRequest(BaseModel):
@@ -54,6 +58,32 @@ def healthz() -> dict[str, object]:
 def scheduler_endpoint(req: AgentRequest) -> AgentResponse:
     trace = req.trace_id or new_trace_id()
     result = _scheduler.run(req.intent, trace_id=trace)
+    return AgentResponse(
+        trace_id=result.trace_id,
+        agent=result.agent,
+        final_text=result.final_text,
+        tool_calls=result.tool_calls,
+        error=result.error,
+    )
+
+
+@app.post("/agents/eligibility", response_model=AgentResponse)
+def eligibility_endpoint(req: AgentRequest) -> AgentResponse:
+    trace = req.trace_id or new_trace_id()
+    result = _eligibility.run(req.intent, trace_id=trace)
+    return AgentResponse(
+        trace_id=result.trace_id,
+        agent=result.agent,
+        final_text=result.final_text,
+        tool_calls=result.tool_calls,
+        error=result.error,
+    )
+
+
+@app.post("/agents/triage", response_model=AgentResponse)
+def triage_endpoint(req: AgentRequest) -> AgentResponse:
+    trace = req.trace_id or new_trace_id()
+    result = _triage.run(req.intent, trace_id=trace)
     return AgentResponse(
         trace_id=result.trace_id,
         agent=result.agent,

@@ -60,17 +60,73 @@ def serve(
 @app.command()
 def dashboard(
     port: int = typer.Option(8501, "--port", "-p"),
+    host: str = typer.Option("localhost", "--host", "-h"),
 ) -> None:
     """Open the Streamlit observability dashboard."""
-    console.print(f"[yellow]TODO[/yellow] Streamlit dashboard on port {port} (Phase 1 backlog)")
+    import subprocess
+    from pathlib import Path
+
+    init_events_db()
+    dashboard_file = Path(__file__).resolve().parent.parent / "observability" / "dashboard.py"
+    if not dashboard_file.exists():
+        console.print(f"[red]dashboard file not found:[/red] {dashboard_file}")
+        sys.exit(1)
+
+    console.print(f"[green]Starting dashboard at http://{host}:{port}[/green]")
+    subprocess.run(
+        [
+            "streamlit",
+            "run",
+            str(dashboard_file),
+            "--server.address",
+            host,
+            "--server.port",
+            str(port),
+        ],
+        check=False,
+    )
 
 
 @app.command(name="eval")
 def run_eval(
-    suite: str = typer.Option("all", "--suite", "-s"),
+    suite: str = typer.Option("all", "--suite", "-s", help="Tag filter or 'all'"),
+    no_persist: bool = typer.Option(
+        False, "--no-persist", help="Do not write results to events store"
+    ),
 ) -> None:
     """Run the golden eval harness against the agents."""
-    console.print(f"[yellow]TODO[/yellow] eval suite '{suite}' (Phase 1 backlog)")
+    from clinic_ops_copilot.eval.runner import run_suite, summarize
+
+    results = run_suite(suite=suite, persist=not no_persist)
+    summary = summarize(results)
+
+    table = Table(title=f"Eval results - suite={suite}")
+    table.add_column("case", style="cyan")
+    table.add_column("mode")
+    table.add_column("tags", style="dim")
+    table.add_column("status")
+    table.add_column("detail", overflow="fold")
+    for r in results:
+        if r.skipped:
+            status = "[yellow]skip[/yellow]"
+        elif r.passed:
+            status = "[green]pass[/green]"
+        else:
+            status = "[red]FAIL[/red]"
+        table.add_row(
+            r.case_id,
+            r.mode,
+            ",".join(r.tags),
+            status,
+            r.detail,
+        )
+    console.print(table)
+    console.print(
+        f"[bold]{summary['passed']}/{summary['total']} passed[/bold] "
+        f"({summary['failed']} failed, {summary['skipped']} skipped)"
+    )
+
+    sys.exit(1 if summary["failed"] > 0 else 0)
 
 
 @app.command()
