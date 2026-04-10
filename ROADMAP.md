@@ -2,7 +2,7 @@
 
 ## Phase 1 -- v0.1 (in progress, 2026-04-07)
 
-The minimum viable artifact a Forward Deployed Engineer would bring to a customer on day one.
+The minimum viable feature set.
 
 - [x] Repo scaffold + project structure
 - [x] README, ARCHITECTURE.md, ROADMAP.md, QUICKSTART.md
@@ -13,7 +13,7 @@ The minimum viable artifact a Forward Deployed Engineer would bring to a custome
 - [x] Storage layer: psycopg connection helpers, raw-SQL query module
 - [x] Events store (SQLite) with structured logging
 - [x] Tool surfaces for Scheduler agent
-- [x] Scheduler agent (Anthropic SDK with tool-use loop, full observability)
+- [x] Scheduler agent (OpenAI SDK pointed at OpenRouter, custom tool-use loop, full observability)
 - [x] FastAPI gateway with `/agents/scheduler` endpoint
 - [x] CLI (`clinicops seed`, `clinicops serve`, `clinicops logs`, `clinicops healthcheck`)
 - [x] Smoke tests passing (6/6)
@@ -36,7 +36,7 @@ Differentiation layer. Ships after v0.1 lands.
 
 ## Phase 3 -- Stretch
 
-The "what I would do with more time" list, kept here so reviewers can see the long-range plan.
+Future improvements and extensions.
 
 - [ ] Multi-tenant row-level security with Postgres RLS
 - [ ] Real EHR integration via OpenEMR FHIR API

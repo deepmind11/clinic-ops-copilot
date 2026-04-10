@@ -2,20 +2,20 @@
 
 ## Design Goals
 
-ClinicOps Copilot is designed to be the artifact a Forward Deployed Engineer would actually deploy on day one of a customer engagement. That goal drives every architectural decision below.
+ClinicOps Copilot is designed for real-world clinic operations deployment. These goals drive every architectural decision below.
 
 1. **Real healthcare data shapes.** FHIR R4, not toy schemas.
 2. **Observability is first-class, not an add-on.** Every tool call is traced.
 3. **A CLI a customer's IT team can run.** Not a Jupyter notebook demo.
 4. **Eval harness blocks promotion.** Correctness is provable, not aspirational.
 5. **Infrastructure as code.** Terraform module ships with v0.2.
-6. **Pragmatic dependencies.** Anthropic SDK, Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
+6. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
 
 ## Component Map
 
 ### CLI (`clinicops`)
 
-The single entry point a customer-facing engineer uses on the ground. Subcommands:
+The single entry point for managing the system. Subcommands:
 
 - `clinicops seed --patients N` -- generate synthetic patients via Synthea, load into Postgres
 - `clinicops serve` -- start the FastAPI gateway and the agents
@@ -35,7 +35,7 @@ A thin HTTP layer in front of the agents. One POST endpoint per agent:
 
 Each request is assigned a `trace_id` that propagates through every tool call and lands in the events store.
 
-### Agents (Anthropic SDK with custom tool-use loop)
+### Agents (OpenAI SDK pointed at OpenRouter, custom tool-use loop)
 
 Three agents in v0.1, each with its own prompt, tool surface, and structured output schema:
 
@@ -116,7 +116,7 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 
 | Dependency | Why |
 |-----------|-----|
-| anthropic SDK | Stable, well-documented tool-use loop. Direct SDK gives full control over observability instrumentation, no framework abstraction tax |
+| openai SDK (pointed at OpenRouter) | Single LLM provider, OpenAI-compatible API, model-agnostic. Default model is `anthropic/claude-sonnet-4.5`. Direct SDK gives full control over observability instrumentation, no framework abstraction tax |
 | FastAPI | Async-first, type-safe, Pydantic-native, ubiquitous in modern Python |
 | Postgres | Industry standard for healthcare. JSONB makes FHIR storage clean |
 | `fhir.resources` | Official Pydantic models for FHIR R4. Saves weeks of schema work |
@@ -130,7 +130,7 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 ## What Is Deliberately Not Here
 
 - **No vector database.** Agents use structured tool calls, not RAG. Healthcare ops decisions need to be auditable, and vector retrieval is opaque.
-- **No LangChain or LlamaIndex.** The anthropic SDK is the right level of abstraction here. Higher-level frameworks add indirection that gets in the way of clean observability and break when their internal APIs churn.
+- **No LangChain or LlamaIndex.** The OpenAI SDK pointed at OpenRouter is the right level of abstraction here. Higher-level frameworks add indirection that gets in the way of clean observability and break when their internal APIs churn.
 - **No ORM in the hot path.** SQLAlchemy adds latency and indirection. Raw SQL is clearer.
 - **No frontend framework beyond Streamlit.** Time better spent on agent quality and observability.
 - **No Kubernetes.** Lambda + RDS is the right granularity for a single-tenant clinic deployment in v0.2.
