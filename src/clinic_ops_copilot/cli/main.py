@@ -84,28 +84,32 @@ def _run_repl() -> None:
             console.print("[dim]bye[/dim]")
             break
 
-        # Triage: classify and route
-        triage_result = triage.run(user_input, trace_id=trace)
-        if triage_result.error:
-            console.print(f"[red]Triage error:[/red] {triage_result.error}")
-            continue
+        # If mid-conversation, skip triage and stay with the current agent.
+        # Only run triage for the opening message of each new topic.
+        if current_target and history:
+            target = current_target
+        else:
+            triage_result = triage.run(user_input, trace_id=trace)
+            if triage_result.error:
+                console.print(f"[red]Triage error:[/red] {triage_result.error}")
+                continue
 
-        target = None
-        for tc in triage_result.tool_calls:
-            if tc.get("tool") == "route_to_agent":
-                target = tc.get("output", {}).get("target")
-                break
+            target = None
+            for tc in triage_result.tool_calls:
+                if tc.get("tool") == "route_to_agent":
+                    target = tc.get("output", {}).get("target")
+                    break
 
-        if not target or target == "human":
-            console.print(triage_result.final_text)
-            history = []
-            current_target = None
-            continue
+            if not target or target == "human":
+                console.print(triage_result.final_text)
+                history = []
+                current_target = None
+                continue
 
-        # Reset history when switching agents mid-session
-        if target != current_target:
-            history = []
-            current_target = target
+            # New topic — reset history
+            if target != current_target:
+                history = []
+                current_target = target
 
         target_reg = registry.get(target)
         if not target_reg:
