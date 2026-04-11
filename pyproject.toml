@@ -1,6 +1,6 @@
 [project]
 name = "clinic-ops-copilot"
-version = "0.1.0"
+version = "0.2.0"
 description = "Agentic operations layer for a synthetic clinic. Multi-agent AI over a FHIR R4 database with first-class observability."
 readme = "README.md"
 requires-python = ">=3.11"

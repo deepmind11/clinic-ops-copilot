@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/) and follows [
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.2.0] - 2026-04-11
+
+### Added
+
 - **Onboarding agent** — new sub-agent that registers first-time patients into the FHIR database. Duplicate-checks by phone, validates birth dates, returns a new `patient_id` the patient can use immediately. Tools: `lookup_patient`, `register_patient`
 - **Interactive REPL** — `clinicops` with no subcommand drops into an interactive session with `prompt-toolkit`: persistent history at `~/.clinicops_history`, up/down arrow recall, `ctrl+r` reverse search, inline autosuggest from history
 - **Streaming responses** — agents now use the OpenAI SDK's streaming API; text appears token-by-token as the model generates it. Full accumulated text still returned in `result.final_text` for non-streaming callers
@@ -22,10 +30,12 @@ This project adheres to [Semantic Versioning](https://semver.org/) and follows [
 - **Master agent system prompt** — rewritten to explicitly suppress internal routing disclosure ("never say 'routing to scheduler'"). Tool surface now built dynamically from the agent registry at build time instead of hardcoded
 - **Dashboard empty-state text** updated to reference current CLI commands (`clinicops`, `clinicops eval`) instead of removed subcommands
 - **CLI `chat` subcommand** simplified — delegates directly to the master agent instead of manually orchestrating triage + downstream handoff
+- **All markdown docs** refreshed (README, ARCHITECTURE, QUICKSTART, CONTRIBUTING, ROADMAP, plugins/README, evals/golden/README, bug-report template) to reflect the agents-as-tools architecture and current CLI surface
 
 ### Fixed
 
 - **`register_patient` input validation** runs before any database I/O, so bad inputs (malformed dates, missing names) fail fast with clear error messages without touching Postgres
+- **Dashboard `Recent decisions` panel** — crashed with `ValueError: cannot convert float NaN to integer` on events without a latency (e.g. `agent_start`, `agent_end`). Now uses `pd.notna()` instead of `is not None`, since pandas represents missing numeric values as `NaN`
 - **REPL visual affordances** — HTTP request logs from `httpx` suppressed in the REPL so they don't drown out streamed agent output; session boundary made visually distinct with a `rich.Panel` banner and a colored `you ▶` prompt (not mistakable for a shell prompt)
 
 ## [0.1.0] - 2026-04-10
@@ -56,5 +66,6 @@ This project adheres to [Semantic Versioning](https://semver.org/) and follows [
 - Loom demo recording pending
 - Install from source only (no PyPI release yet)
 
-[Unreleased]: https://github.com/deepmind11/clinic-ops-copilot/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/deepmind11/clinic-ops-copilot/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/deepmind11/clinic-ops-copilot/releases/tag/v0.2.0
 [0.1.0]: https://github.com/deepmind11/clinic-ops-copilot/releases/tag/v0.1.0

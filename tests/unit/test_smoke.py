@@ -8,7 +8,7 @@ import clinic_ops_copilot
 
 
 def test_version() -> None:
-    assert clinic_ops_copilot.__version__ == "0.1.0"
+    assert clinic_ops_copilot.__version__ == "0.2.0"
 
 
 def test_cli_app_loads() -> None:
