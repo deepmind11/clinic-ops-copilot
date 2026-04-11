@@ -22,22 +22,22 @@ cd clinic-ops-copilot
 # Install
 uv sync --all-extras
 
-# Configure — copy the example and fill in your OpenRouter key
+# Configure — copy the example and fill in your API key
 cp .env.example .env
-# Edit .env and set OPENROUTER_API_KEY=sk-or-v1-...
+# Edit .env and set LLM_API_KEY (see .env.example for provider options)
 
 # Start Postgres + load synthetic data
 docker compose up -d
 uv run clinicops seed --patients 1000
 
-# Send an intent through triage and the appropriate agent
-uv run clinicops chat "I need to book a cleaning next Tuesday at 2pm"
+# Start an interactive session
+uv run clinicops
 
 # Open the observability dashboard
 uv run clinicops dashboard
 
 # Run the eval harness
-clinicops eval
+uv run clinicops eval
 ```
 
 See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.

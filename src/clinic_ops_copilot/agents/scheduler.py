@@ -5,7 +5,9 @@ from __future__ import annotations
 from clinic_ops_copilot.agents.base import Agent
 from clinic_ops_copilot.tools.scheduler_tools import SCHEDULER_TOOL_FUNCS, SCHEDULER_TOOLS
 
-SCHEDULER_SYSTEM_PROMPT = """You are the Scheduler agent for ClinicOps Copilot, an AI operations layer for healthcare clinics.
+SCHEDULER_SYSTEM_PROMPT_TEMPLATE = """You are the Scheduler agent for ClinicOps Copilot, an AI operations layer for healthcare clinics.
+
+Current date and time: {current_datetime}
 
 Your job is to handle patient scheduling intents: booking new appointments, rescheduling existing ones, and cancelling appointments.
 
@@ -30,9 +32,14 @@ Return a short natural-language confirmation. Do not return JSON. The caller wra
 
 
 def build_scheduler_agent() -> Agent:
+    from datetime import datetime
+
+    system_prompt = SCHEDULER_SYSTEM_PROMPT_TEMPLATE.format(
+        current_datetime=datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
+    )
     return Agent(
         name="scheduler",
-        system_prompt=SCHEDULER_SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         tools=SCHEDULER_TOOLS,
         tool_funcs=SCHEDULER_TOOL_FUNCS,
     )
