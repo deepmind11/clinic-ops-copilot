@@ -68,8 +68,12 @@ def _run_repl() -> None:
     )
     console.print()
 
-    current_target: str | None = None
-    history: list[dict] = []  # conversation history for the active downstream agent
+    # session_history: full conversation — passed to triage each turn so it
+    # can make context-aware routing decisions (orchestrator pattern).
+    # agent_histories: per-agent history — each downstream agent only sees
+    # its own prior exchanges, keeping context focused.
+    session_history: list[dict] = []
+    agent_histories: dict[str, list[dict]] = {}
 
     while True:
         try:
@@ -84,32 +88,25 @@ def _run_repl() -> None:
             console.print("[dim]bye[/dim]")
             break
 
-        # If mid-conversation, skip triage and stay with the current agent.
-        # Only run triage for the opening message of each new topic.
-        if current_target and history:
-            target = current_target
-        else:
-            triage_result = triage.run(user_input, trace_id=trace)
-            if triage_result.error:
-                console.print(f"[red]Triage error:[/red] {triage_result.error}")
-                continue
+        # Orchestrator: triage runs every turn with full session context so it
+        # can distinguish follow-ups from topic switches.
+        triage_result = triage.run(user_input, trace_id=trace, prior_messages=session_history)
+        if triage_result.error:
+            console.print(f"[red]Triage error:[/red] {triage_result.error}")
+            continue
 
-            target = None
-            for tc in triage_result.tool_calls:
-                if tc.get("tool") == "route_to_agent":
-                    target = tc.get("output", {}).get("target")
-                    break
+        target = None
+        for tc in triage_result.tool_calls:
+            if tc.get("tool") == "route_to_agent":
+                target = tc.get("output", {}).get("target")
+                break
 
-            if not target or target == "human":
-                console.print(triage_result.final_text)
-                history = []
-                current_target = None
-                continue
-
-            # New topic — reset history
-            if target != current_target:
-                history = []
-                current_target = target
+        if not target or target == "human":
+            # Triage handles this directly: escalation or clarifying question
+            console.print(triage_result.final_text)
+            session_history.append({"role": "user", "content": user_input})
+            session_history.append({"role": "assistant", "content": triage_result.final_text})
+            continue
 
         target_reg = registry.get(target)
         if not target_reg:
@@ -118,7 +115,9 @@ def _run_repl() -> None:
 
         agent = target_reg.factory()
         console.print(f"[dim]→ {target}[/dim]")
-        result = agent.run(user_input, trace_id=trace, prior_messages=history)
+
+        agent_history = agent_histories.setdefault(target, [])
+        result = agent.run(user_input, trace_id=trace, prior_messages=agent_history)
 
         if result.error:
             console.print(f"[red]Error:[/red] {result.error}")
@@ -126,9 +125,13 @@ def _run_repl() -> None:
 
         console.print(result.final_text)
 
-        # Accumulate history for the next turn
-        history.append({"role": "user", "content": user_input})
-        history.append({"role": "assistant", "content": result.final_text})
+        # Update both histories
+        turn = [
+            {"role": "user", "content": user_input},
+            {"role": "assistant", "content": result.final_text},
+        ]
+        session_history.extend(turn)
+        agent_history.extend(turn)
 
 
 def _setup_registry() -> list[str]:
