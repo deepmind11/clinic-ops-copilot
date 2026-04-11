@@ -37,28 +37,43 @@ def default(ctx: typer.Context) -> None:
 
 def _run_repl() -> None:
     """Interactive REPL with in-session conversation memory."""
+    import logging
+
+    from rich.panel import Panel
+
     from clinic_ops_copilot.agents.registry import registry
     from clinic_ops_copilot.agents.triage import build_triage_agent
     from clinic_ops_copilot.observability.tracing import new_trace_id
+
+    # Suppress httpx transport noise — users don't need to see HTTP wire logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
     configure_logging(settings.log_level)
     init_events_db()
 
     loaded = _setup_registry()
-    if loaded:
-        console.print(f"[dim]plugins: {', '.join(loaded)}[/dim]")
 
     triage = build_triage_agent()
     trace = new_trace_id()
 
-    console.print("[green]ClinicOps Copilot[/green]  [dim]ctrl+c or 'exit' to quit[/dim]\n")
+    console.print(
+        Panel(
+            "[bold cyan]ClinicOps Copilot[/bold cyan]\n"
+            "[dim]Describe what you need and I'll route you to the right team.\n"
+            "Type [bold]exit[/bold] or press [bold]ctrl+c[/bold] to quit.[/dim]"
+            + (f"\n[dim]plugins: {', '.join(loaded)}[/dim]" if loaded else ""),
+            border_style="cyan",
+            padding=(0, 1),
+        )
+    )
+    console.print()
 
     current_target: str | None = None
     history: list[dict] = []  # conversation history for the active downstream agent
 
     while True:
         try:
-            user_input = input("> ").strip()
+            user_input = console.input("[bold cyan]you[/bold cyan] [dim]▶[/dim] ").strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]bye[/dim]")
             break
