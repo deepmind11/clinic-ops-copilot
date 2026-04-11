@@ -89,8 +89,17 @@ class Agent:
             else None
         )
 
-    def run(self, user_message: str, trace_id: str | None = None) -> AgentResult:
-        """Run the tool-use loop until the model returns a final answer."""
+    def run(
+        self,
+        user_message: str,
+        trace_id: str | None = None,
+        prior_messages: list[dict[str, Any]] | None = None,
+    ) -> AgentResult:
+        """Run the tool-use loop until the model returns a final answer.
+
+        Pass ``prior_messages`` to continue an existing conversation — the agent
+        will see the full history before the current user message.
+        """
         if self.client is None:
             return AgentResult(
                 trace_id=trace_id or "no-trace",
@@ -103,10 +112,10 @@ class Agent:
         result = AgentResult(trace_id=trace, agent=self.name, final_text="")
         record_event(trace, self.name, "agent_start", "ok", payload={"user": user_message})
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_message},
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
+        if prior_messages:
+            messages.extend(prior_messages)
+        messages.append({"role": "user", "content": user_message})
 
         try:
             for _iteration in range(self.max_iterations):

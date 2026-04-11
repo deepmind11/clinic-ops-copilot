@@ -22,9 +22,94 @@ from clinic_ops_copilot.storage.events import init_events_db, recent_events
 app = typer.Typer(
     name="clinicops",
     help="Agentic operations layer for healthcare clinics.",
-    no_args_is_help=True,
+    no_args_is_help=False,
+    invoke_without_command=True,
 )
 console = Console()
+
+
+@app.callback(invoke_without_command=True)
+def default(ctx: typer.Context) -> None:
+    """Start an interactive session when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        _run_repl()
+
+
+def _run_repl() -> None:
+    """Interactive REPL with in-session conversation memory."""
+    from clinic_ops_copilot.agents.registry import registry
+    from clinic_ops_copilot.agents.triage import build_triage_agent
+    from clinic_ops_copilot.observability.tracing import new_trace_id
+
+    configure_logging(settings.log_level)
+    init_events_db()
+
+    loaded = _setup_registry()
+    if loaded:
+        console.print(f"[dim]plugins: {', '.join(loaded)}[/dim]")
+
+    triage = build_triage_agent()
+    trace = new_trace_id()
+
+    console.print("[green]ClinicOps Copilot[/green]  [dim]ctrl+c or 'exit' to quit[/dim]\n")
+
+    current_target: str | None = None
+    history: list[dict] = []  # conversation history for the active downstream agent
+
+    while True:
+        try:
+            user_input = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print("\n[dim]bye[/dim]")
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit", "bye"):
+            console.print("[dim]bye[/dim]")
+            break
+
+        # Triage: classify and route
+        triage_result = triage.run(user_input, trace_id=trace)
+        if triage_result.error:
+            console.print(f"[red]Triage error:[/red] {triage_result.error}")
+            continue
+
+        target = None
+        for tc in triage_result.tool_calls:
+            if tc.get("tool") == "route_to_agent":
+                target = tc.get("output", {}).get("target")
+                break
+
+        if not target or target == "human":
+            console.print(triage_result.final_text)
+            history = []
+            current_target = None
+            continue
+
+        # Reset history when switching agents mid-session
+        if target != current_target:
+            history = []
+            current_target = target
+
+        target_reg = registry.get(target)
+        if not target_reg:
+            console.print(f"[yellow]No agent registered for '{target}'[/yellow]")
+            continue
+
+        agent = target_reg.factory()
+        console.print(f"[dim]→ {target}[/dim]")
+        result = agent.run(user_input, trace_id=trace, prior_messages=history)
+
+        if result.error:
+            console.print(f"[red]Error:[/red] {result.error}")
+            continue
+
+        console.print(result.final_text)
+
+        # Accumulate history for the next turn
+        history.append({"role": "user", "content": user_input})
+        history.append({"role": "assistant", "content": result.final_text})
 
 
 def _setup_registry() -> list[str]:
