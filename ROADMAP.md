@@ -14,8 +14,7 @@ The minimum viable feature set.
 - [x] Events store (SQLite) with structured logging
 - [x] Tool surfaces for Scheduler agent
 - [x] Scheduler agent (OpenAI SDK pointed at OpenRouter, custom tool-use loop, full observability)
-- [x] FastAPI gateway with `/agents/scheduler` endpoint
-- [x] CLI (`clinicops seed`, `clinicops serve`, `clinicops logs`, `clinicops healthcheck`)
+- [x] CLI (`clinicops seed`, `clinicops chat`, `clinicops logs`, `clinicops healthcheck`)
 - [x] Smoke tests passing (6/6)
 - [x] GitHub Actions: lint, format, type check, pytest
 - [x] Eligibility agent (tools + agent + endpoint)

@@ -14,22 +14,22 @@ ClinicOps Copilot is a working multi-agent system where three Claude agents (Sch
 
 ```
                   +-------------------+
-                  |  CLI (clinicops)  |   discovery, deploy, eval, seed
+                  |  CLI (clinicops)  |   chat, seed, eval, logs
                   +---------+---------+
                             |
                   +---------v---------+
-                  |  FastAPI Gateway  |
+                  |   Triage Agent    |   classifies intent, routes
                   +---------+---------+
                             |
               +-------------+-------------+
-              |             |             |
-        +-----v----+  +-----v----+  +-----v-----+
-        |Scheduler |  |Eligibility|  |  Triage  |    Claude Agent SDK
-        |  Agent   |  |   Agent   |  |   Agent  |    (multi-agent)
-        +-----+----+  +-----+----+  +-----+-----+
-              |             |             |
-              +------+------+------+------+
-                     |             |
+              |                           |
+        +-----v----+               +-----v-----+
+        |Scheduler |               |Eligibility|    OpenAI SDK
+        |  Agent   |               |   Agent   |    (in-process)
+        +-----+----+               +-----+-----+
+              |                         |
+              +------------+------------+
+                           |
               +------v------+   +--v---------+
               |  Postgres   |   |  Events    |
               | (FHIR R4)   |   |  Store     |
@@ -61,7 +61,6 @@ A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.
 
 - **Language:** Python 3.11+
 - **Agent framework:** OpenAI Python SDK pointed at OpenRouter (`anthropic/claude-sonnet-4.5` by default) with a custom tool-use loop (no LangChain, no LlamaIndex, no abstraction tax). Single provider, no provider-switching code paths.
-- **Web layer:** FastAPI
 - **Data layer:** PostgreSQL with FHIR R4 schema via `fhir.resources` Pydantic models
 - **Synthetic data:** [Synthea](https://github.com/synthetichealth/synthea) (open-source synthetic patient generator)
 - **Observability:** SQLite events store + Streamlit dashboard
@@ -151,7 +150,6 @@ clinic-ops-copilot/
 ├── src/clinic_ops_copilot/
 │   ├── agents/                # Scheduler, Eligibility, Triage
 │   ├── tools/                 # tool surfaces wrapping Postgres
-│   ├── api/                   # FastAPI gateway
 │   ├── storage/               # FHIR Pydantic models, Postgres, events store
 │   ├── observability/         # logging, dashboard, metrics
 │   └── cli/                   # clinicops CLI

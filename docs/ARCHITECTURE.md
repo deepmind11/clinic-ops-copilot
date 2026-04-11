@@ -8,7 +8,7 @@ ClinicOps Copilot is designed for real-world clinic operations deployment. These
 2. **Observability is first-class, not an add-on.** Every tool call is traced.
 3. **A CLI a customer's IT team can run.** Not a Jupyter notebook demo.
 4. **Eval harness blocks promotion.** Correctness is provable, not aspirational.
-5. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
+5. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, Streamlit, Faker. No exotic tools, no churning frameworks.
 
 ## Component Map
 
@@ -106,7 +106,6 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 | Dependency | Why |
 |-----------|-----|
 | openai SDK (pointed at OpenRouter) | Single LLM provider, OpenAI-compatible API, model-agnostic. Default model is `anthropic/claude-sonnet-4.5`. Direct SDK gives full control over observability instrumentation, no framework abstraction tax |
-| FastAPI | Async-first, type-safe, Pydantic-native, ubiquitous in modern Python |
 | Postgres | Industry standard for healthcare. JSONB makes FHIR storage clean |
 | `fhir.resources` | Official Pydantic models for FHIR R4. Saves weeks of schema work |
 | Synthea | Industry-standard synthetic patient generator. Used by HL7 and ONC |
