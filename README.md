@@ -86,6 +86,24 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design decisions.
 
 A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.md).
 
+## Extending ClinicOps
+
+Every clinic is different. Add your own workflow by dropping a single `.py` file into `plugins/`:
+
+```python
+# plugins/prior_auth.py
+AGENT_NAME = "prior_auth"
+AGENT_DESCRIPTION = "Checks prior authorization requirements and status."
+
+def build_agent():
+    from clinic_ops_copilot.agents.base import Agent
+    return Agent(name=AGENT_NAME, system_prompt=SYSTEM_PROMPT, tools=TOOLS, tool_funcs=TOOL_FUNCS)
+```
+
+On next startup, Triage automatically discovers the new agent and routes to it when relevant. No changes to core code required.
+
+See [`plugins/README.md`](plugins/README.md) for the full contract and a reference implementation (`plugins/_prior_auth_example.py`).
+
 ## Tech Stack
 
 - **Language:** Python 3.11+
@@ -144,8 +162,11 @@ clinic-ops-copilot/
 │   ├── ARCHITECTURE.md        # design decisions
 │   ├── QUICKSTART.md          # full walkthrough
 │   └── EVALS.md               # eval harness details
+├── plugins/                   # drop .py files here to add new workflows
+│   ├── README.md              # plugin contract and how-to
+│   └── _prior_auth_example.py # reference implementation (prefixed _ = inactive)
 ├── src/clinic_ops_copilot/
-│   ├── agents/                # Scheduler, Eligibility, Triage
+│   ├── agents/                # Scheduler, Eligibility, Triage + registry
 │   ├── tools/                 # tool surfaces wrapping Postgres
 │   ├── storage/               # FHIR Pydantic models, Postgres, events store
 │   ├── observability/         # logging, dashboard, metrics

@@ -27,6 +27,29 @@ app = typer.Typer(
 console = Console()
 
 
+def _setup_registry() -> list[str]:
+    """Register built-in agents and discover plugins from ./plugins/."""
+    from pathlib import Path
+
+    from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
+    from clinic_ops_copilot.agents.registry import registry
+    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+
+    registry.register(
+        "scheduler",
+        "Books, reschedules, and cancels patient appointments.",
+        build_scheduler_agent,
+    )
+    registry.register(
+        "eligibility",
+        "Checks patient insurance coverage and prior authorization requirements.",
+        build_eligibility_agent,
+    )
+
+    plugins_dir = Path.cwd() / "plugins"
+    return registry.discover(plugins_dir)
+
+
 @app.command()
 def seed(
     patients: int = typer.Option(1000, "--patients", "-n", help="Number of synthetic patients"),
@@ -43,15 +66,18 @@ def chat(
     intent: str = typer.Argument(..., help="Clinical intent to process"),
 ) -> None:
     """Send an intent through triage and the appropriate downstream agent."""
-    from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
-    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+    from clinic_ops_copilot.agents.registry import registry
     from clinic_ops_copilot.agents.triage import build_triage_agent
     from clinic_ops_copilot.observability.tracing import new_trace_id
 
     configure_logging(settings.log_level)
     init_events_db()
-    trace = new_trace_id()
 
+    loaded = _setup_registry()
+    if loaded:
+        console.print(f"[dim]plugins: {', '.join(loaded)}[/dim]")
+
+    trace = new_trace_id()
     console.print(f"[dim]trace: {trace}[/dim]\n")
 
     triage = build_triage_agent()
@@ -71,15 +97,16 @@ def chat(
             target = tc.get("output", {}).get("target")
             break
 
-    if target == "scheduler":
-        agent = build_scheduler_agent()
-        console.print("\n[cyan]→ scheduler[/cyan]")
-    elif target == "eligibility":
-        agent = build_eligibility_agent()
-        console.print("\n[cyan]→ eligibility[/cyan]")
-    else:
-        return  # triage handled it (escalation or unrouted)
+    if not target or target == "human":
+        return  # escalation or unrouted — triage handled it
 
+    target_reg = registry.get(target)
+    if not target_reg:
+        console.print(f"[yellow]No agent registered for '{target}'[/yellow]")
+        return
+
+    agent = target_reg.factory()
+    console.print(f"\n[cyan]→ {target}[/cyan]")
     result = agent.run(intent, trace_id=trace)
     if result.error:
         console.print(f"[red]Error:[/red] {result.error}")

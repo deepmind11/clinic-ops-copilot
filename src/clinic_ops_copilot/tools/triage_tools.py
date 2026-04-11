@@ -145,13 +145,23 @@ def classify_intent(text: str) -> dict[str, Any]:
     """Classify a patient utterance into an intent class and detect language.
 
     Returns scores per class so the agent can decide whether the top match is
-    confident or whether to ask for clarification.
+    confident or whether to ask for clarification. Plugin-contributed keywords
+    (via INTENT_KEYWORDS in plugin files) are merged in automatically.
     """
-    lower = text.lower()
-    scores: dict[str, int] = dict.fromkeys(INTENT_KEYWORDS, 0)
-    matched: dict[str, list[str]] = {k: [] for k in INTENT_KEYWORDS}
+    # Merge built-in keywords with any plugin contributions
+    all_keywords: dict[str, list[str]] = {k: list(v) for k, v in INTENT_KEYWORDS.items()}
+    try:
+        from clinic_ops_copilot.agents.registry import registry
+        for cls, kws in registry.extra_keywords().items():
+            all_keywords.setdefault(cls, []).extend(kws)
+    except ImportError:
+        pass
 
-    for cls, keywords in INTENT_KEYWORDS.items():
+    lower = text.lower()
+    scores: dict[str, int] = dict.fromkeys(all_keywords, 0)
+    matched: dict[str, list[str]] = {k: [] for k in all_keywords}
+
+    for cls, keywords in all_keywords.items():
         for kw in keywords:
             if kw in lower:
                 scores[cls] += 1
@@ -186,25 +196,29 @@ def classify_intent(text: str) -> dict[str, Any]:
 
 
 def route_to_agent(intent_class: str) -> dict[str, Any]:
-    """Resolve an intent_class to a downstream agent."""
-    routes = {
-        "scheduling": "scheduler",
-        "eligibility": "eligibility",
-        "billing": "billing",  # Phase 2
-        "escalation": "human",
-    }
-    target = routes.get(intent_class)
-    if target is None:
-        return {
-            "routed": False,
-            "reason": f"unknown intent_class: {intent_class}",
-        }
-    return {
-        "routed": True,
-        "intent_class": intent_class,
-        "target": target,
-        "available_in_phase_1": intent_class in ("scheduling", "eligibility", "escalation"),
-    }
+    """Resolve an intent_class to a downstream agent.
+
+    Checks the agent registry first so dynamically registered plugins are
+    valid routing targets. Falls back to hardcoded built-in routes so this
+    function works in test contexts where the registry is not populated.
+    """
+    if intent_class == "escalation":
+        return {"routed": True, "intent_class": intent_class, "target": "human"}
+
+    # Check registry for registered agents (built-ins + plugins)
+    try:
+        from clinic_ops_copilot.agents.registry import registry
+        if intent_class in registry.names():
+            return {"routed": True, "intent_class": intent_class, "target": intent_class}
+    except ImportError:
+        pass
+
+    # Fallback for test contexts where registry is not populated
+    _fallback: dict[str, str] = {"scheduling": "scheduler", "eligibility": "eligibility"}
+    if intent_class in _fallback:
+        return {"routed": True, "intent_class": intent_class, "target": _fallback[intent_class]}
+
+    return {"routed": False, "reason": f"unknown intent_class: {intent_class}"}
 
 
 def escalate_to_human(reason: str, urgency: str = "normal") -> dict[str, Any]:
@@ -252,16 +266,13 @@ TRIAGE_TOOLS = [
     },
     {
         "name": "route_to_agent",
-        "description": (
-            "Resolve an intent_class to its downstream agent endpoint. Returns "
-            "available_in_phase_1=False for billing (which is Phase 2)."
-        ),
+        "description": "Resolve an intent_class to its downstream agent.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "intent_class": {
                     "type": "string",
-                    "enum": ["scheduling", "eligibility", "billing", "escalation"],
+                    "description": "The intent class to route to",
                 }
             },
             "required": ["intent_class"],
@@ -290,3 +301,36 @@ TRIAGE_TOOLS = [
         },
     },
 ]
+
+
+def build_triage_tool_surface(
+    agent_names: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return a (tools, tool_funcs) pair with the route_to_agent enum built
+    from the currently registered agent names.
+
+    Called by build_triage_agent() so the tool schema always reflects whatever
+    agents are registered at startup (built-ins + plugins).
+    """
+    valid_classes = [*agent_names, "escalation"]
+
+    tools = [
+        TRIAGE_TOOLS[0],  # classify_intent — static
+        {
+            "name": "route_to_agent",
+            "description": "Resolve an intent_class to its downstream agent.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "intent_class": {
+                        "type": "string",
+                        "enum": valid_classes,
+                        "description": "The intent class to route to",
+                    }
+                },
+                "required": ["intent_class"],
+            },
+        },
+        TRIAGE_TOOLS[2],  # escalate_to_human — static
+    ]
+    return tools, TRIAGE_TOOL_FUNCS

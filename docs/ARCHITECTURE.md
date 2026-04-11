@@ -8,7 +8,8 @@ ClinicOps Copilot is designed for real-world clinic operations deployment. These
 2. **Observability is first-class, not an add-on.** Every tool call is traced.
 3. **A CLI a customer's IT team can run.** Not a Jupyter notebook demo.
 4. **Eval harness blocks promotion.** Correctness is provable, not aspirational.
-5. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, Streamlit, Faker. No exotic tools, no churning frameworks.
+5. **Extensible by design.** New workflows are added as plugin files — no core code changes required.
+6. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, Streamlit, Faker. No exotic tools, no churning frameworks.
 
 ## Component Map
 
@@ -47,6 +48,8 @@ Three agents in v0.1, each with its own prompt, tool surface, and structured out
 - **Output schema:** `{ "intent_class": "scheduling|eligibility|billing|escalation", "language": "en|es|mixed", "routed_to": "..." }`
 
 The Triage agent's multilingual handling addresses a known weakness across healthcare AI products and is exercised by the eval harness.
+
+Triage's system prompt and `route_to_agent` tool schema are generated dynamically at startup from the agent registry. When a new plugin is registered, Triage automatically knows about it — no prompt edits required.
 
 ### Storage Layer
 
@@ -113,6 +116,64 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 | Typer | Best-in-class CLI ergonomics with type hints |
 | SQLite | Zero-config telemetry store. Single-file, fast, decoupled from operational DB |
 | uv | Fast modern Python package manager. Standard in 2026 AI engineering |
+
+## Plugin System
+
+ClinicOps is designed so that different clinics can add their own workflows without touching core code.
+
+### How it works
+
+At startup, the CLI scans the `plugins/` directory for `.py` files and registers any it finds. A registered plugin becomes a first-class agent: Triage knows about it, can route to it, and the `clinicops chat` command can invoke it.
+
+### Plugin contract
+
+A plugin file must define three things:
+
+```python
+AGENT_NAME = "prior_auth"          # unique routing key
+AGENT_DESCRIPTION = "..."          # shown to Triage; determines when it routes here
+def build_agent() -> Agent: ...    # returns a configured Agent instance
+```
+
+Optionally, it can define `INTENT_KEYWORDS` to improve the keyword classifier's confidence when routing to the new agent.
+
+### Initialization order
+
+```
+clinicops chat starts
+  → registry populated: built-ins (scheduler, eligibility) registered
+  → plugins/ scanned: any valid .py files registered
+  → build_triage_agent() called: reads registry → generates system prompt + route enum
+  → chat loop runs
+```
+
+### Adding a new workflow
+
+```bash
+cp plugins/_prior_auth_example.py plugins/prior_auth.py
+# fill in the tool implementations
+clinicops chat "Does patient 123 need prior auth for a knee replacement?"
+```
+
+No changes to Triage, no changes to the CLI. The new agent is live immediately.
+
+### Plugin file naming
+
+Files starting with `_` are skipped by the registry (examples, drafts). Rename without the leading `_` to activate.
+
+### Common workflow categories
+
+| Category | What it handles |
+|---|---|
+| Prior Authorization | Pre-approval checks, auth status |
+| Referral Management | Specialist referrals, referral status |
+| Lab Results | Abnormal flagging, provider notification |
+| Medication Management | Refill requests, drug prior auth |
+| Billing / RCM | Claim status, denial classification |
+| Patient Outreach | Reminders, follow-up communication |
+| Discharge Planning | Post-care coordination |
+
+See `plugins/README.md` for the full contract and a reference implementation.
 
 ## What Is Deliberately Not Here
 

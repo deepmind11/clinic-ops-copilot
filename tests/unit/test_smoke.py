@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import clinic_ops_copilot
 
 
@@ -160,7 +162,7 @@ def test_triage_route() -> None:
 
     assert route_to_agent("scheduling")["target"] == "scheduler"
     assert route_to_agent("eligibility")["target"] == "eligibility"
-    assert route_to_agent("billing")["available_in_phase_1"] is False
+    assert route_to_agent("billing")["routed"] is False  # billing not yet registered
     assert route_to_agent("nonsense")["routed"] is False
 
 
@@ -207,6 +209,66 @@ def test_eval_deterministic_cases_pass() -> None:
     summary = summarize(results)
     # Agent cases should be marked skipped (no API key in unit test env)
     assert summary["skipped"] >= 0  # tolerate 0 if a key happens to be set
+
+
+def test_registry_register_and_lookup() -> None:
+    """Fresh registry instance should store and retrieve registrations."""
+    from clinic_ops_copilot.agents.registry import AgentRegistry
+    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+
+    reg = AgentRegistry()
+    reg.register("scheduler", "Handles scheduling.", build_scheduler_agent)
+
+    assert "scheduler" in reg.names()
+    entry = reg.get("scheduler")
+    assert entry is not None
+    assert entry.description == "Handles scheduling."
+    assert entry.factory is build_scheduler_agent
+
+
+def test_registry_plugin_discovery(tmp_path: Any) -> None:
+    """Registry should auto-discover and load a valid plugin file."""
+    import textwrap
+
+    plugin = tmp_path / "dummy_plugin.py"
+    plugin.write_text(
+        textwrap.dedent("""\
+            AGENT_NAME = "dummy"
+            AGENT_DESCRIPTION = "A dummy plugin for testing."
+            def build_agent():
+                from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+                return build_scheduler_agent()
+        """)
+    )
+
+    from clinic_ops_copilot.agents.registry import AgentRegistry
+
+    reg = AgentRegistry()
+    loaded = reg.discover(tmp_path)
+
+    assert "dummy" in loaded
+    assert "dummy" in reg.names()
+    assert reg.get("dummy").description == "A dummy plugin for testing."  # type: ignore[union-attr]
+
+
+def test_registry_skips_underscore_files(tmp_path: Any) -> None:
+    """Files starting with _ must not be loaded."""
+    import textwrap
+
+    (tmp_path / "_example.py").write_text(
+        textwrap.dedent("""\
+            AGENT_NAME = "should_not_load"
+            AGENT_DESCRIPTION = "Should be skipped."
+            def build_agent(): pass
+        """)
+    )
+
+    from clinic_ops_copilot.agents.registry import AgentRegistry
+
+    reg = AgentRegistry()
+    loaded = reg.discover(tmp_path)
+    assert loaded == []
+    assert "should_not_load" not in reg.names()
 
 
 def test_events_store_init() -> None:
