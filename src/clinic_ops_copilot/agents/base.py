@@ -206,9 +206,7 @@ class Agent:
         record_event(trace, self.name, "agent_end", "ok" if result.error is None else "error")
         return result
 
-    def _dispatch_tool(
-        self, tool_name: str, tool_args: dict[str, Any], trace_id: str
-    ) -> Any:
+    def _dispatch_tool(self, tool_name: str, tool_args: dict[str, Any], trace_id: str) -> Any:
         func = self.tool_funcs.get(tool_name)
         if func is None:
             err = f"tool not registered: {tool_name}"

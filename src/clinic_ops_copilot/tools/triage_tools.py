@@ -152,6 +152,7 @@ def classify_intent(text: str) -> dict[str, Any]:
     all_keywords: dict[str, list[str]] = {k: list(v) for k, v in INTENT_KEYWORDS.items()}
     try:
         from clinic_ops_copilot.agents.registry import registry
+
         for cls, kws in registry.extra_keywords().items():
             all_keywords.setdefault(cls, []).extend(kws)
     except ImportError:
@@ -208,6 +209,7 @@ def route_to_agent(intent_class: str) -> dict[str, Any]:
     # Check registry for registered agents (built-ins + plugins)
     try:
         from clinic_ops_copilot.agents.registry import registry
+
         if intent_class in registry.names():
             return {"routed": True, "intent_class": intent_class, "target": intent_class}
     except ImportError:

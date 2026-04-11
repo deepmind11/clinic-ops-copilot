@@ -68,9 +68,7 @@ class AgentRegistry:
             if path.name.startswith("_"):
                 continue
             try:
-                spec = importlib.util.spec_from_file_location(
-                    f"clinicops_plugin_{path.stem}", path
-                )
+                spec = importlib.util.spec_from_file_location(f"clinicops_plugin_{path.stem}", path)
                 if spec is None or spec.loader is None:
                     continue
                 mod = importlib.util.module_from_spec(spec)
@@ -89,9 +87,7 @@ class AgentRegistry:
                 )
                 loaded.append(mod.AGENT_NAME)
             except Exception as exc:
-                warnings.warn(
-                    f"Failed to load plugin {path.name}: {exc}", stacklevel=2
-                )
+                warnings.warn(f"Failed to load plugin {path.name}: {exc}", stacklevel=2)
 
         return loaded
 
