@@ -183,9 +183,9 @@ def render() -> None:
         st.write(f"**{len(trace_df)} events** in trace `{selected_trace}`")
         for _, row in trace_df.iterrows():
             label = f"`{row['event_type']}`"
-            if row["tool_name"]:
+            if pd.notna(row["tool_name"]) and row["tool_name"]:
                 label += f"  -  **{row['tool_name']}**"
-            if row["latency_ms"] is not None:
+            if pd.notna(row["latency_ms"]):
                 label += f"  -  {int(row['latency_ms'])}ms"
             label += f"  -  _{row['status']}_"
             with st.expander(label):
