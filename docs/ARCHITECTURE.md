@@ -128,6 +128,6 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 ## What Is Deliberately Not Here
 
 - **No vector database.** Agents use structured tool calls, not RAG. Healthcare ops decisions need to be auditable, and vector retrieval is opaque.
-- **No LangChain or LlamaIndex.** The OpenAI SDK pointed at OpenRouter is the right level of abstraction here. Higher-level frameworks add indirection that gets in the way of clean observability and break when their internal APIs churn.
+- **No LangChain or LlamaIndex.** We use the raw SDK to keep the codebase self-contained and the observability homegrown. LangChain or LangGraph with Langfuse would be equally valid and more familiar to teams already in that ecosystem.
 - **No ORM in the hot path.** SQLAlchemy adds latency and indirection. Raw SQL is clearer.
 - **No frontend framework beyond Streamlit.** Time better spent on agent quality and observability.
