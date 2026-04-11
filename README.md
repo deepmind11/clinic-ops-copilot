@@ -8,7 +8,9 @@
 
 ## What This Is
 
-ClinicOps Copilot is a working multi-agent system where three Claude agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database, handle real edge cases (booking conflicts, expired coverage, code-switched Spanish intents), and stream every tool call to a Streamlit observability dashboard. A single CLI (`clinicops`) handles seeding, serving, and evals.
+ClinicOps Copilot is a working multi-agent system for clinic operations. Three built-in agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database and handle real edge cases — booking conflicts, expired coverage, code-switched Spanish intents. Every tool call is traced to a Streamlit observability dashboard.
+
+The system is built around an **agent registry**: a central directory of available workflows that Triage reads at startup to decide where to route each patient intent. Built-in agents are registered automatically. New workflows are added by dropping a single `.py` file into `plugins/` — no core code changes required. A single CLI (`clinicops`) handles seeding, chat, and evals.
 
 ## Quick Start
 
