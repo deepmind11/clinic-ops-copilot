@@ -8,8 +8,7 @@ ClinicOps Copilot is designed for real-world clinic operations deployment. These
 2. **Observability is first-class, not an add-on.** Every tool call is traced.
 3. **A CLI a customer's IT team can run.** Not a Jupyter notebook demo.
 4. **Eval harness blocks promotion.** Correctness is provable, not aspirational.
-5. **Infrastructure as code.** Terraform module ships with v0.2.
-6. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
+5. **Pragmatic dependencies.** OpenAI SDK (pointed at OpenRouter), Postgres, FastAPI, Streamlit, Faker. No exotic tools, no churning frameworks.
 
 ## Component Map
 
@@ -124,7 +123,6 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 | Streamlit | Fastest path to a working dashboard. Iterates in minutes |
 | Typer | Best-in-class CLI ergonomics with type hints |
 | SQLite | Zero-config telemetry store. Single-file, fast, decoupled from operational DB |
-| Terraform | Industry standard for IaC. AWS Lambda + RDS module is portable |
 | uv | Fast modern Python package manager. Standard in 2026 AI engineering |
 
 ## What Is Deliberately Not Here
@@ -133,4 +131,3 @@ User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 - **No LangChain or LlamaIndex.** The OpenAI SDK pointed at OpenRouter is the right level of abstraction here. Higher-level frameworks add indirection that gets in the way of clean observability and break when their internal APIs churn.
 - **No ORM in the hot path.** SQLAlchemy adds latency and indirection. Raw SQL is clearer.
 - **No frontend framework beyond Streamlit.** Time better spent on agent quality and observability.
-- **No Kubernetes.** Lambda + RDS is the right granularity for a single-tenant clinic deployment in v0.2.

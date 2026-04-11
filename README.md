@@ -8,7 +8,7 @@
 
 ## What This Is
 
-ClinicOps Copilot is a working multi-agent system where three Claude agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database, handle real edge cases (booking conflicts, expired coverage, code-switched Spanish intents), and stream every tool call to a Streamlit observability dashboard. A single CLI (`clinicops`) handles seeding, deployment, and evals. A Terraform module deploys the whole thing to AWS Lambda + RDS in one command.
+ClinicOps Copilot is a working multi-agent system where three Claude agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database, handle real edge cases (booking conflicts, expired coverage, code-switched Spanish intents), and stream every tool call to a Streamlit observability dashboard. A single CLI (`clinicops`) handles seeding, serving, and evals.
 
 ## Architecture
 
@@ -66,7 +66,6 @@ A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.
 - **Synthetic data:** [Synthea](https://github.com/synthetichealth/synthea) (open-source synthetic patient generator)
 - **Observability:** SQLite events store + Streamlit dashboard
 - **Eval harness:** Plain Python + 20 golden test cases (booking conflicts, coverage edge cases, Spanish code-switching)
-- **Infrastructure:** Terraform module for AWS Lambda + RDS
 - **CI/CD:** GitHub Actions (lint, type check, tests, eval harness on every PR)
 - **Packaging:** uv
 
@@ -101,10 +100,6 @@ clinicops eval
 ```
 
 See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
-
-## Live Demo
-
-Phase 2 will ship a public AWS-hosted demo URL. For now, watch the 90-second Loom: *(coming with v0.1)*.
 
 ## Eval Harness
 
@@ -165,12 +160,11 @@ clinic-ops-copilot/
 │   ├── integration/
 │   └── evals/                 # 20 golden test cases
 ├── evals/golden/              # JSON test cases
-├── infra/terraform/           # AWS Lambda + RDS module
 ├── scripts/                   # migration, discovery, seed
 └── data/synthea/              # generated synthetic data (gitignored)
 ```
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the phased plan. v0.1 ships Phase 1; Phase 2 adds the AWS deploy and the fourth Billing/RCM agent.
+See [ROADMAP.md](ROADMAP.md) for the phased plan.
 

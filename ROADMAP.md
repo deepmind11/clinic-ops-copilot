@@ -28,8 +28,6 @@ The minimum viable feature set.
 
 Differentiation layer. Ships after v0.1 lands.
 
-- [ ] Terraform module: AWS Lambda + RDS Postgres + API Gateway
-- [ ] Public AWS-hosted demo URL
 - [ ] Fourth Billing/RCM agent (claim status, denial reason classification, eligibility re-check)
 - [ ] Loom demo with the live URL
 - [ ] Per-customer config layer (one config file per "tenant")
