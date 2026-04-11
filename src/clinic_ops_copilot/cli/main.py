@@ -242,7 +242,7 @@ def healthcheck() -> None:
     console.print(f"Postgres: {'[green]ok[/green]' if db_ok else '[red]unreachable[/red]'}")
     console.print("Events store: [green]ok[/green]")
     console.print(
-        f"OpenRouter API key: {'[green]set[/green]' if settings.openrouter_api_key else '[red]missing[/red]'}"
+        f"LLM API key: {'[green]set[/green]' if settings.llm_api_key else '[red]missing[/red]'}"
     )
     sys.exit(0 if db_ok else 1)
 

@@ -110,7 +110,7 @@ See [`plugins/README.md`](plugins/README.md) for the full contract and a referen
 ## Tech Stack
 
 - **Language:** Python 3.11+
-- **Agent framework:** OpenAI Python SDK pointed at OpenRouter (`anthropic/claude-sonnet-4.5` by default) with a custom tool-use loop (no LangChain, no LlamaIndex, no abstraction tax). Single provider, no provider-switching code paths.
+- **Agent framework:** OpenAI Python SDK with a custom tool-use loop (no LangChain, no LlamaIndex, no abstraction tax). Works with any OpenAI-compatible provider — OpenRouter (default, `anthropic/claude-sonnet-4.5`), OpenAI, or Ollama locally. Configure via `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`.
 - **Data layer:** PostgreSQL with FHIR R4 schema via `fhir.resources` Pydantic models
 - **Synthetic data:** [Synthea](https://github.com/synthetichealth/synthea) (open-source synthetic patient generator)
 - **Observability:** SQLite events store + Streamlit dashboard

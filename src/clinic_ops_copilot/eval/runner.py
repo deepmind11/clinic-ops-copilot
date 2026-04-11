@@ -165,7 +165,7 @@ def _build_agent(name: str) -> Any:
 
 
 def _run_agent_case(case: dict[str, Any]) -> CaseResult:
-    if not settings.openrouter_api_key:
+    if not settings.llm_api_key:
         return CaseResult(
             case_id=case["id"],
             tags=case.get("tags", []),

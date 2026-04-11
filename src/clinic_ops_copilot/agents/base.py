@@ -1,9 +1,12 @@
-"""Shared agent runner built on the OpenAI SDK pointed at OpenRouter.
+"""Shared agent runner built on the OpenAI SDK.
 
-We deliberately use the openai Python SDK directly (against OpenRouter's
-OpenAI-compatible /v1 endpoint) rather than a higher-level agent framework.
-The SDK's tool-use loop is stable, well-documented, and gives us full
-control over observability instrumentation. Each agent supplies a system
+Works with any OpenAI-compatible LLM provider: OpenRouter, OpenAI, Ollama,
+LM Studio, Azure OpenAI, Groq, Together, etc. Configure via LLM_BASE_URL,
+LLM_API_KEY, and LLM_MODEL in your .env.
+
+We use the openai Python SDK directly rather than a higher-level agent
+framework. The SDK's tool-use loop is stable, well-documented, and gives us
+full control over observability instrumentation. Each agent supplies a system
 prompt, a tool schema list, and a tool dispatch table; the runner handles
 the rest.
 
@@ -75,14 +78,14 @@ class Agent:
         self.tools = tools
         self.openai_tools = _to_openai_tools(tools)
         self.tool_funcs = tool_funcs
-        self.model = model or settings.openrouter_model
+        self.model = model or settings.llm_model
         self.max_iterations = max_iterations
         self.client = (
             OpenAI(
-                api_key=settings.openrouter_api_key,
-                base_url=settings.openrouter_base_url,
+                api_key=settings.llm_api_key,
+                base_url=settings.llm_base_url,
             )
-            if settings.openrouter_api_key
+            if settings.llm_api_key
             else None
         )
 
@@ -93,7 +96,7 @@ class Agent:
                 trace_id=trace_id or "no-trace",
                 agent=self.name,
                 final_text="",
-                error="OPENROUTER_API_KEY not set",
+                error="LLM_API_KEY not set",
             )
 
         trace = trace_id or new_trace_id()

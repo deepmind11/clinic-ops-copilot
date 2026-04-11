@@ -20,9 +20,9 @@ def test_cli_app_loads() -> None:
 def test_config_loads() -> None:
     from clinic_ops_copilot.config import settings
 
-    # Default points at OpenRouter; model id is namespaced (e.g. "anthropic/claude-...")
-    assert "/" in settings.openrouter_model
-    assert settings.openrouter_base_url.startswith("https://openrouter.ai")
+    # Model id is namespaced (e.g. "anthropic/claude-..." or "openai/gpt-4o")
+    assert "/" in settings.llm_model
+    assert settings.llm_base_url.startswith("http")
 
 
 def test_scheduler_tools_schema() -> None:

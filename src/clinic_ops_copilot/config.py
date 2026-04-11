@@ -19,10 +19,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # OpenRouter (LLM provider, OpenAI-compatible API)
-    openrouter_api_key: str = ""
-    openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    openrouter_model: str = "anthropic/claude-sonnet-4.5"
+    # LLM provider — any OpenAI-compatible endpoint (OpenRouter, OpenAI, Ollama, etc.)
+    llm_api_key: str = ""
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    llm_model: str = "anthropic/claude-sonnet-4.5"
 
     # Postgres (operational FHIR database)
     database_url: str = "postgresql://clinicops:clinicops_dev@localhost:5433/clinic_ops"
