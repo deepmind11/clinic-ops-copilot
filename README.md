@@ -79,15 +79,17 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design decisions.
 
-## The Three Agents (Phase 1)
+## Built-in Agents
 
-| Agent | Status | Role | Tool Calls |
-|-------|--------|------|------------|
-| **Scheduler** | shipped | Books, reschedules, cancels appointments. Handles double-bookings, slot conflicts, provider availability. | `find_open_slots`, `book_appointment`, `cancel_appointment`, `lookup_patient` |
-| **Eligibility** | shipped | Checks insurance coverage status from FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
-| **Triage** | shipped | Routes new patient intents to the right downstream agent or human. Handles Spanish code-switching. | `classify_intent`, `route_to_agent`, `escalate_to_human` |
+The patient always talks to a single **ClinicOps Assistant** (the master). Behind the scenes, the master delegates to specialized sub-agents via `delegate_to_<name>` tools — the patient never sees the handoff.
 
-A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.md).
+| Sub-agent | Role | Tool Surface |
+|-----------|------|--------------|
+| **Onboarding** | Registers new patients into the FHIR database. Duplicate-checks by phone before insert. | `lookup_patient`, `register_patient` |
+| **Scheduler** | Books, reschedules, and cancels appointments. Handles double-bookings, slot conflicts, provider availability. | `find_open_slots`, `book_appointment`, `cancel_appointment`, `lookup_patient` |
+| **Eligibility** | Checks insurance coverage from the FHIR Coverage resource. Flags expired plans, missing prior auth, ineligible services. | `lookup_coverage`, `check_active_period`, `get_payor_rules` |
+
+A **Billing/RCM** sub-agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.md).
 
 ## Extending ClinicOps
 

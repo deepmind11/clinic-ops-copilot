@@ -114,14 +114,21 @@ registry = AgentRegistry()
 
 
 def register_builtins() -> None:
-    """Register the built-in Scheduler and Eligibility agents on the singleton.
+    """Register the built-in agents on the singleton.
 
     Idempotent: calling twice is a no-op. Shared by the CLI startup and the
     eval runner so the master agent always sees the built-ins as delegate tools.
     """
     from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
+    from clinic_ops_copilot.agents.onboarding import build_onboarding_agent
     from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
 
+    if "onboarding" not in registry.names():
+        registry.register(
+            "onboarding",
+            "Registers new patients who have never visited the clinic before.",
+            build_onboarding_agent,
+        )
     if "scheduler" not in registry.names():
         registry.register(
             "scheduler",

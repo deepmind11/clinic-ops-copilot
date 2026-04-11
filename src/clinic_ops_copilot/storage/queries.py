@@ -7,6 +7,8 @@ No ORM. The SQL is what runs.
 
 from __future__ import annotations
 
+import json
+import uuid
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -41,6 +43,50 @@ def get_patient(patient_id: str) -> dict[str, Any] | None:
     with get_cursor() as cur:
         cur.execute("SELECT * FROM patient WHERE id = %s", (patient_id,))
         return cur.fetchone()
+
+
+def create_patient(
+    family_name: str,
+    given_name: str,
+    phone: str,
+    birth_date: date | None = None,
+    language: str = "en",
+) -> dict[str, Any]:
+    """Insert a new patient row and return the created record.
+
+    Generates a unique patient_id and builds a minimal FHIR Patient resource
+    to store in the ``resource`` JSONB column, mirroring the shape produced by
+    ``scripts/seed.py`` so downstream queries treat onboarded and seeded
+    patients identically.
+    """
+    patient_id = f"pat-{uuid.uuid4().hex[:8]}"
+    resource: dict[str, Any] = {
+        "resourceType": "Patient",
+        "id": patient_id,
+        "name": [{"family": family_name, "given": [given_name]}],
+        "communication": [{"language": {"coding": [{"code": language}]}}],
+        "telecom": [{"system": "phone", "value": phone, "use": "mobile"}],
+    }
+    if birth_date is not None:
+        resource["birthDate"] = birth_date.isoformat()
+
+    with get_cursor() as cur:
+        cur.execute(
+            "INSERT INTO patient (id, family_name, given_name, birth_date, language, phone, resource) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) "
+            "RETURNING id, family_name, given_name, birth_date, language, phone",
+            (
+                patient_id,
+                family_name,
+                given_name,
+                birth_date,
+                language,
+                phone,
+                json.dumps(resource),
+            ),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else {}
 
 
 # ---------------------------------------------------------------------------

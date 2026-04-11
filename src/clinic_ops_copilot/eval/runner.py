@@ -157,6 +157,10 @@ def _build_agent(name: str) -> Any:
         from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
 
         return build_eligibility_agent()
+    if name == "onboarding":
+        from clinic_ops_copilot.agents.onboarding import build_onboarding_agent
+
+        return build_onboarding_agent()
     if name == "triage":
         from clinic_ops_copilot.agents.registry import register_builtins
         from clinic_ops_copilot.agents.triage import build_triage_agent

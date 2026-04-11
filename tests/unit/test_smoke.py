@@ -72,6 +72,59 @@ def test_eligibility_agent_builds() -> None:
     assert "get_payor_rules" in agent.tool_funcs
 
 
+def test_onboarding_tools_schema() -> None:
+    from clinic_ops_copilot.tools.onboarding_tools import (
+        ONBOARDING_TOOL_FUNCS,
+        ONBOARDING_TOOLS,
+    )
+
+    tool_names = {t["name"] for t in ONBOARDING_TOOLS}
+    func_names = set(ONBOARDING_TOOL_FUNCS.keys())
+    assert tool_names == func_names, "tool schemas and dispatch table must match"
+    assert "lookup_patient" in tool_names
+    assert "register_patient" in tool_names
+
+
+def test_onboarding_agent_builds() -> None:
+    from clinic_ops_copilot.agents.onboarding import build_onboarding_agent
+
+    agent = build_onboarding_agent()
+    assert agent.name == "onboarding"
+    assert len(agent.tools) == 2
+    assert "register_patient" in agent.tool_funcs
+    assert "lookup_patient" in agent.tool_funcs
+
+
+def test_register_patient_validates_birth_date() -> None:
+    """Bad dates should be rejected without hitting the DB."""
+    from clinic_ops_copilot.tools.onboarding_tools import register_patient
+
+    # Invalid format — should fail before any DB interaction
+    result = register_patient(
+        family_name="Smith",
+        given_name="John",
+        phone="+15551234567",
+        birth_date="not-a-date",
+    )
+    assert result["success"] is False
+    assert "YYYY-MM-DD" in result["reason"]
+
+
+def test_register_builtins_includes_onboarding() -> None:
+    """The master agent should see onboarding as a registered delegate."""
+    from clinic_ops_copilot.agents.registry import register_builtins, registry
+
+    original = registry._agents
+    try:
+        registry._agents = {}
+        register_builtins()
+        assert "onboarding" in registry.names()
+        assert "scheduler" in registry.names()
+        assert "eligibility" in registry.names()
+    finally:
+        registry._agents = original
+
+
 def test_payor_rules_logic() -> None:
     """Sanity check the payor rules registry returns sensible answers."""
     from clinic_ops_copilot.tools.eligibility_tools import get_payor_rules
