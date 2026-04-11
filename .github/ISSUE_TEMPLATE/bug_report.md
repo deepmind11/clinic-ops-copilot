@@ -39,11 +39,12 @@ error output here
 
 ## Which agent is affected?
 
+- [ ] ClinicOps Assistant (master / triage)
+- [ ] Onboarding
 - [ ] Scheduler
 - [ ] Eligibility
-- [ ] Triage
 - [ ] Plugin (specify name):
-- [ ] CLI
+- [ ] CLI / REPL
 - [ ] Dashboard
 - [ ] Eval harness
 

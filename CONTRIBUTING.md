@@ -78,14 +78,16 @@ uv run clinicops eval
 
 The easiest way to contribute a new clinical workflow is a plugin — a single `.py` file dropped into `plugins/`. No changes to core code required.
 
+ClinicOps uses an **agents-as-tools** pattern: the patient talks to one user-facing ClinicOps Assistant, which delegates specialized work to sub-agents via `delegate_to_<name>` tool calls. A plugin is a sub-agent the registry picks up at startup. When you add a plugin named `prior_auth`, the assistant automatically gains a `delegate_to_prior_auth` tool.
+
 See [`plugins/README.md`](plugins/README.md) for the full contract. The reference implementation is [`plugins/_prior_auth_example.py`](plugins/_prior_auth_example.py) — the `_` prefix keeps it inactive; rename it to activate.
 
 **Quick summary of the contract:**
 
 ```python
 # plugins/my_workflow.py
-AGENT_NAME = "my_workflow"           # used for routing
-AGENT_DESCRIPTION = "One sentence."  # shown to Triage at startup
+AGENT_NAME = "my_workflow"           # becomes delegate_to_my_workflow on the assistant
+AGENT_DESCRIPTION = "One sentence."  # drives routing — describe what the workflow handles
 
 def build_agent():
     from clinic_ops_copilot.agents.base import Agent
@@ -95,8 +97,12 @@ def build_agent():
 **Testing a plugin locally:**
 
 ```bash
-# Drop your file into plugins/ and run a relevant intent
-uv run clinicops chat "Does patient 123 need prior auth for a knee replacement?"
+# Drop your file into plugins/ and start an interactive session
+uv run clinicops
+> Does patient pat-00042 need prior auth for a knee replacement?
+
+# Or a one-shot request:
+uv run clinicops chat "Does patient pat-00042 need prior auth for a knee replacement?"
 
 # Check the tool-call trace in the dashboard
 uv run clinicops dashboard

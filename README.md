@@ -8,9 +8,11 @@
 
 ## What This Is
 
-ClinicOps Copilot is a working multi-agent system for clinic operations. Three built-in agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database and handle real edge cases — booking conflicts, expired coverage, code-switched Spanish intents. Every tool call is traced to a Streamlit observability dashboard.
+ClinicOps Copilot is a working multi-agent system for clinic operations. It operates over a synthetic FHIR R4 patient database and handles real edge cases — new-patient intake, booking conflicts, expired coverage, code-switched Spanish intents. Every tool call is traced to a Streamlit observability dashboard.
 
-The system is built around an **agent registry**: a central directory of available workflows that Triage reads at startup to decide where to route each patient intent. Built-in agents are registered automatically. New workflows are added by dropping a single `.py` file into `plugins/` — no core code changes required. A single CLI (`clinicops`) handles seeding, chat, and evals.
+The patient always talks to a single **ClinicOps Assistant**. Behind the scenes, the assistant delegates specialized work to sub-agents (Onboarding, Scheduler, Eligibility) via `delegate_to_<name>` tool calls — an *agents-as-tools* architecture where sub-agents are invoked as stateless subroutines and the handoff is invisible to the user.
+
+Sub-agents live in an **agent registry**. Built-ins register at startup, and new workflows are added by dropping a single `.py` file into `plugins/` — the assistant automatically picks it up as another delegate tool. A single CLI (`clinicops`) handles seeding, interactive chat, dashboard, and evals.
 
 ## Quick Start
 
@@ -45,37 +47,47 @@ See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
 ## Architecture
 
 ```
-                  +-------------------+
-                  |  CLI (clinicops)  |   chat, seed, eval, logs
-                  +---------+---------+
-                            |
-                  +---------v---------+
-                  |   Triage Agent    |   classifies intent, routes
-                  +---------+---------+
-                            |
-              +-------------+-------------+
-              |                           |
-        +-----v----+               +-----v-----+
-        |Scheduler |               |Eligibility|    OpenAI SDK
-        |  Agent   |               |   Agent   |    (in-process)
-        +-----+----+               +-----+-----+
-              |                         |
-              +------------+------------+
-                           |
-              +------v------+   +--v---------+
-              |  Postgres   |   |  Events    |
-              | (FHIR R4)   |   |  Store     |
-              | Patient     |   | (SQLite)   |
-              | Appointment |   | per-call   |
-              | Coverage    |   | metrics    |
-              | Claim       |   +------+-----+
-              +-------------+          |
-                                +------v------+
-                                | Streamlit   |
-                                | Observability|
-                                | Dashboard   |
-                                +-------------+
+  +-------------------------------------+
+  |       CLI (clinicops)               |   REPL, seed, eval, dashboard, logs
+  |  streaming output · prompt history  |
+  +------------------+------------------+
+                     |
+                     v
+  +-------------------------------------+
+  |       ClinicOps Assistant           |   single user-facing agent
+  |          (master / triage)          |   owns conversation state
+  +------------------+------------------+
+                     |  delegate_to_<name>(request)  (internal tool calls)
+     +---------------+---------------+
+     |               |               |
+     v               v               v
+  +-------+      +---------+      +-----------+
+  |Onboard|      |Scheduler|      |Eligibility|       each is a sub-agent
+  |  ing  |      |         |      |           |       with its own tool
+  +---+---+      +----+----+      +-----+-----+       loop + system prompt
+      |               |                 |
+      +---------------+-----------------+
+                      |
+                      v  (raw SQL via psycopg)
+          +-----------------------+       +--------------+
+          |      Postgres         |       |  SQLite      |
+          |     (FHIR R4)         |       |  Events      |
+          |  Patient              |       |  Store       |
+          |  Appointment          |       |  per-call    |
+          |  Coverage             |       |  metrics     |
+          |  Practitioner         |       +------+-------+
+          |  ProviderSlot · Claim |              |
+          +-----------------------+              v
+                                         +--------------+
+                                         |  Streamlit   |
+                                         | Observability|
+                                         |  Dashboard   |
+                                         +--------------+
 ```
+
+- The **Assistant** is the only thing the patient sees. It owns the conversation, decides when to delegate, and streams its responses token-by-token.
+- **Delegate calls** propagate the master's `trace_id` via a `ContextVar` so every sub-agent event lands under the same trace in the events store — the dashboard shows the whole chain as one interaction.
+- **Plugins** register in the same registry and automatically become new `delegate_to_<plugin_name>` tools on the assistant.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design decisions.
 
@@ -105,7 +117,7 @@ def build_agent():
     return Agent(name=AGENT_NAME, system_prompt=SYSTEM_PROMPT, tools=TOOLS, tool_funcs=TOOL_FUNCS)
 ```
 
-On next startup, Triage automatically discovers the new agent and routes to it when relevant. No changes to core code required.
+On next startup the assistant automatically picks up the plugin as a new `delegate_to_prior_auth` tool and starts routing relevant requests to it. No changes to core code required.
 
 See [`plugins/README.md`](plugins/README.md) for the full contract and a reference implementation (`plugins/_prior_auth_example.py`).
 
@@ -122,15 +134,20 @@ See [`plugins/README.md`](plugins/README.md) for the full contract and a referen
 
 ## Eval Harness
 
-The 20 golden test cases cover:
+The golden test suite runs in two modes per case:
 
-- **Scheduling:** double-booked slots, provider unavailable, same-day requests, slot conflicts
-- **Eligibility:** expired coverage, missing prior auth, ineligible service, payor rule mismatch
-- **Triage:** new patient intake, urgent re-routing, escalation criteria
-- **Multilingual:** Spanish intents, English-Spanish code-switching mid-utterance (a known weakness across healthcare AI products)
-- **Failure modes:** tool call timeouts, malformed FHIR data, downstream API errors
+- **Deterministic** — calls a tool function directly with known inputs and asserts on the return value. Runs in CI with no API keys or database.
+- **Agent** — invokes the real LLM-backed agent over its tool surface. Requires `LLM_API_KEY` and a seeded Postgres; skipped gracefully if the prerequisites are missing.
 
-Run them with `clinicops eval`. Pass/fail metrics are written to the events store and surfaced in the dashboard.
+The suite covers:
+
+- **Scheduling:** booking flow, reschedule, cancel, provider-unavailable fallbacks, same-day requests
+- **Eligibility:** payor rules (Aetna, Cigna, Blue Cross, Medicare, unknown payor)
+- **Triage (classifier):** English, Spanish, English-Spanish code-switching mid-utterance, urgency detection
+- **Triage (agent):** assistant routes through `delegate_to_*` tools
+- **Onboarding:** new-patient registration flow
+
+Run them with `uv run clinicops eval`. Pass/fail metrics are written to the events store and surfaced in the dashboard.
 
 ## Why FHIR?
 
@@ -163,25 +180,28 @@ The dashboard surfaces:
 clinic-ops-copilot/
 ├── README.md                  # this file
 ├── ROADMAP.md                 # phased delivery plan
+├── CHANGELOG.md               # what shipped in each release
+├── CONTRIBUTING.md            # dev setup, tests, plugin guide
 ├── docs/
 │   ├── ARCHITECTURE.md        # design decisions
-│   ├── QUICKSTART.md          # full walkthrough
-│   └── EVALS.md               # eval harness details
+│   └── QUICKSTART.md          # full walkthrough
 ├── plugins/                   # drop .py files here to add new workflows
 │   ├── README.md              # plugin contract and how-to
 │   └── _prior_auth_example.py # reference implementation (prefixed _ = inactive)
 ├── src/clinic_ops_copilot/
-│   ├── agents/                # Scheduler, Eligibility, Triage + registry
-│   ├── tools/                 # tool surfaces wrapping Postgres
-│   ├── storage/               # FHIR Pydantic models, Postgres, events store
-│   ├── observability/         # logging, dashboard, metrics
-│   └── cli/                   # clinicops CLI
+│   ├── agents/                # base, registry, triage (master), onboarding,
+│   │                          # scheduler, eligibility
+│   ├── tools/                 # tool surfaces for each sub-agent
+│   ├── storage/               # Postgres queries, events store, database helpers
+│   ├── observability/         # logging, tracing, Streamlit dashboard
+│   ├── eval/                  # eval harness runner
+│   └── cli/                   # clinicops CLI (REPL + subcommands)
 ├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── evals/                 # 20 golden test cases
-├── evals/golden/              # JSON test cases
-├── scripts/                   # migration, discovery, seed
+│   └── unit/                  # smoke tests for agents, tools, registry, evals
+├── evals/golden/cases.json    # golden test cases
+├── scripts/
+│   ├── init.sql               # Postgres schema
+│   └── seed.py                # synthetic FHIR data generator
 └── data/synthea/              # generated synthetic data (gitignored)
 ```
 

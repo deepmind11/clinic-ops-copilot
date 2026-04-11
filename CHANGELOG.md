@@ -7,9 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/) and follows [
 
 ### Added
 
+- **Onboarding agent** — new sub-agent that registers first-time patients into the FHIR database. Duplicate-checks by phone, validates birth dates, returns a new `patient_id` the patient can use immediately. Tools: `lookup_patient`, `register_patient`
+- **Interactive REPL** — `clinicops` with no subcommand drops into an interactive session with `prompt-toolkit`: persistent history at `~/.clinicops_history`, up/down arrow recall, `ctrl+r` reverse search, inline autosuggest from history
+- **Streaming responses** — agents now use the OpenAI SDK's streaming API; text appears token-by-token as the model generates it. Full accumulated text still returned in `result.final_text` for non-streaming callers
+- **Current datetime injection** into the Scheduler, Onboarding, and master agent system prompts at build time, so agents resolve relative dates like "next Tuesday" without asking for clarification
+- **Trace propagation via `ContextVar`** — master agent sets `current_trace_id` at the start of its run; delegate tools read it when invoking sub-agents so every nested event lands under the same trace in the events store
+- **`register_builtins()`** helper in the agent registry, shared by the CLI startup and eval runner as a single source of truth for default agent registration
+
 ### Changed
 
+- **Single-chatbot UX (agents-as-tools refactor)** — the patient now talks to one user-facing ClinicOps Assistant. Sub-agents (Onboarding, Scheduler, Eligibility) are exposed to the master as `delegate_to_<name>` tools and invoked as stateless subroutines. The master owns the full conversation; sub-agent handoffs are invisible to the user. Previous design had a visible "→ scheduler" routing step that has been removed
+- **Provider-agnostic LLM configuration** — environment variables renamed from `OPENROUTER_*` to `LLM_*` (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`). Works unchanged with OpenRouter (default), OpenAI, Ollama, LM Studio, Groq, Azure OpenAI, and any OpenAI-compatible provider
+- **REPL conversation memory** — in-session history passed to the master on every turn via `prior_messages`, so follow-up messages resolve correctly ("Name: Test, phone 1234" after "I need to book a cleaning")
+- **Master agent system prompt** — rewritten to explicitly suppress internal routing disclosure ("never say 'routing to scheduler'"). Tool surface now built dynamically from the agent registry at build time instead of hardcoded
+- **Dashboard empty-state text** updated to reference current CLI commands (`clinicops`, `clinicops eval`) instead of removed subcommands
+- **CLI `chat` subcommand** simplified — delegates directly to the master agent instead of manually orchestrating triage + downstream handoff
+
 ### Fixed
+
+- **`register_patient` input validation** runs before any database I/O, so bad inputs (malformed dates, missing names) fail fast with clear error messages without touching Postgres
+- **REPL visual affordances** — HTTP request logs from `httpx` suppressed in the REPL so they don't drown out streamed agent output; session boundary made visually distinct with a `rich.Panel` banner and a colored `you ▶` prompt (not mistakable for a shell prompt)
 
 ## [0.1.0] - 2026-04-10
 

@@ -1,6 +1,10 @@
 # ClinicOps Plugins
 
-Drop a `.py` file in this directory and it is automatically discovered and registered as an agent when `clinicops chat` starts.
+Drop a `.py` file in this directory and it is automatically discovered at startup and becomes a new `delegate_to_<name>` tool on the ClinicOps Assistant. No core code changes, no prompt edits.
+
+## How plugins fit into the architecture
+
+ClinicOps uses an **agents-as-tools** pattern: the patient talks to one user-facing assistant (the "master"), which delegates specialized work to sub-agents via `delegate_to_<name>` tool calls. Plugins are just sub-agents that the registry picks up at startup. When you add a plugin named `prior_auth`, the master automatically gains a `delegate_to_prior_auth` tool and starts routing relevant requests to it.
 
 ## Quickstart
 
@@ -9,7 +13,8 @@ Copy an example, fill in the TODOs, and you're done:
 ```bash
 cp _prior_auth_example.py prior_auth.py
 # edit prior_auth.py — fill in the tool implementations
-clinicops chat "Does patient 123 need prior auth for a knee replacement?"
+uv run clinicops
+> Does patient pat-00042 need prior auth for a knee replacement?
 ```
 
 ## Plugin contract
@@ -17,10 +22,10 @@ clinicops chat "Does patient 123 need prior auth for a knee replacement?"
 A plugin file must define three things:
 
 ```python
-# 1. Unique agent name (used for routing)
+# 1. Unique agent name (becomes delegate_to_<AGENT_NAME> on the master)
 AGENT_NAME = "prior_auth"
 
-# 2. One-line description (shown to Triage so it knows when to route here)
+# 2. One-line description (shown to the master so it knows when to delegate here)
 AGENT_DESCRIPTION = "Checks prior authorization requirements and status."
 
 # 3. Factory function that returns a configured Agent
@@ -36,7 +41,7 @@ def build_agent():
 
 ## Optional: intent keywords
 
-Define `INTENT_KEYWORDS` to help the keyword classifier route to your agent:
+Define `INTENT_KEYWORDS` to contribute keywords to the deterministic `classify_intent` utility function. These are useful for eval cases and any keyword-based classification done outside the master agent:
 
 ```python
 INTENT_KEYWORDS = {
@@ -47,8 +52,7 @@ INTENT_KEYWORDS = {
 }
 ```
 
-Without this, Triage can still route to your agent based on the system prompt
-context — but explicit keywords improve confidence scores.
+The master agent itself routes based on `AGENT_DESCRIPTION` and the user's intent, not on these keywords — but a well-chosen description is what drives good routing.
 
 ## File naming
 
