@@ -55,9 +55,22 @@ def seed(
     patients: int = typer.Option(1000, "--patients", "-n", help="Number of synthetic patients"),
 ) -> None:
     """Generate synthetic FHIR data and load it into Postgres."""
-    init_events_db()
-    from scripts import seed as seed_module  # type: ignore[import-not-found]
+    import importlib.util
+    from pathlib import Path
 
+    init_events_db()
+
+    seed_path = Path.cwd() / "scripts" / "seed.py"
+    if not seed_path.exists():
+        console.print(f"[red]seed.py not found:[/red] {seed_path}")
+        sys.exit(1)
+
+    spec = importlib.util.spec_from_file_location("seed", seed_path)
+    if spec is None or spec.loader is None:
+        console.print("[red]Failed to load seed.py[/red]")
+        sys.exit(1)
+    seed_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seed_module)  # type: ignore[union-attr]
     seed_module.main(num_patients=patients)
 
 
