@@ -46,7 +46,6 @@ def _run_repl() -> None:
     from prompt_toolkit.history import FileHistory
     from rich.panel import Panel
 
-    from clinic_ops_copilot.agents.registry import registry
     from clinic_ops_copilot.agents.triage import build_triage_agent
     from clinic_ops_copilot.observability.tracing import new_trace_id
 
@@ -73,8 +72,8 @@ def _run_repl() -> None:
 
     console.print(
         Panel(
-            "[bold cyan]ClinicOps Copilot[/bold cyan]\n"
-            "[dim]Describe what you need and I'll route you to the right team.\n"
+            "[bold cyan]ClinicOps Assistant[/bold cyan]\n"
+            "[dim]Tell me what you need — appointments, insurance, anything.\n"
             "Type [bold]exit[/bold] or press [bold]ctrl+c[/bold] to quit.\n"
             "Up/down arrows recall history · ctrl+r reverse search[/dim]"
             + (f"\n[dim]plugins: {', '.join(loaded)}[/dim]" if loaded else ""),
@@ -84,12 +83,10 @@ def _run_repl() -> None:
     )
     console.print()
 
-    # session_history: full conversation — passed to triage each turn so it
-    # can make context-aware routing decisions (orchestrator pattern).
-    # agent_histories: per-agent history — each downstream agent only sees
-    # its own prior exchanges, keeping context focused.
+    # session_history: the master agent's conversation with the user. Sub-agents
+    # are called stateless behind the scenes via delegate tools; only the master
+    # needs long-running memory of the conversation.
     session_history: list[dict] = []
-    agent_histories: dict[str, list[dict]] = {}
 
     # Stream handler: print agent text as it arrives. We write directly to
     # the underlying file so rich's markup parsing doesn't choke on partial
@@ -111,39 +108,13 @@ def _run_repl() -> None:
             console.print("[dim]bye[/dim]")
             break
 
-        # Orchestrator: triage runs every turn with full session context so it
-        # can distinguish follow-ups from topic switches.
-        triage_result = triage.run(user_input, trace_id=trace, prior_messages=session_history)
-        if triage_result.error:
-            console.print(f"[red]Triage error:[/red] {triage_result.error}")
-            continue
-
-        target = None
-        for tc in triage_result.tool_calls:
-            if tc.get("tool") == "route_to_agent":
-                target = tc.get("output", {}).get("target")
-                break
-
-        if not target or target == "human":
-            # Triage handles this directly: escalation or clarifying question
-            console.print(triage_result.final_text)
-            session_history.append({"role": "user", "content": user_input})
-            session_history.append({"role": "assistant", "content": triage_result.final_text})
-            continue
-
-        target_reg = registry.get(target)
-        if not target_reg:
-            console.print(f"[yellow]No agent registered for '{target}'[/yellow]")
-            continue
-
-        agent = target_reg.factory()
-        console.print(f"[dim]→ {target}[/dim]")
-
-        agent_history = agent_histories.setdefault(target, [])
-        result = agent.run(
+        # Master agent owns the conversation. It decides internally whether
+        # to delegate to a sub-agent, ask a clarifying question, or escalate.
+        # The user only ever sees the master's response, streamed token-by-token.
+        result = triage.run(
             user_input,
             trace_id=trace,
-            prior_messages=agent_history,
+            prior_messages=session_history,
             on_text_chunk=stream_chunk,
         )
         console.print()  # newline after streamed output
@@ -152,33 +123,17 @@ def _run_repl() -> None:
             console.print(f"[red]Error:[/red] {result.error}")
             continue
 
-        # Update both histories
-        turn = [
-            {"role": "user", "content": user_input},
-            {"role": "assistant", "content": result.final_text},
-        ]
-        session_history.extend(turn)
-        agent_history.extend(turn)
+        session_history.append({"role": "user", "content": user_input})
+        session_history.append({"role": "assistant", "content": result.final_text})
 
 
 def _setup_registry() -> list[str]:
     """Register built-in agents and discover plugins from ./plugins/."""
     from pathlib import Path
 
-    from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
-    from clinic_ops_copilot.agents.registry import registry
-    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+    from clinic_ops_copilot.agents.registry import register_builtins, registry
 
-    registry.register(
-        "scheduler",
-        "Books, reschedules, and cancels patient appointments.",
-        build_scheduler_agent,
-    )
-    registry.register(
-        "eligibility",
-        "Checks patient insurance coverage and prior authorization requirements.",
-        build_eligibility_agent,
-    )
+    register_builtins()
 
     plugins_dir = Path.cwd() / "plugins"
     return registry.discover(plugins_dir)
@@ -212,8 +167,10 @@ def seed(
 def chat(
     intent: str = typer.Argument(..., help="Clinical intent to process"),
 ) -> None:
-    """Send an intent through triage and the appropriate downstream agent."""
-    from clinic_ops_copilot.agents.registry import registry
+    """Single-shot request to the ClinicOps Assistant.
+
+    Use ``clinicops`` (no subcommand) for an interactive session.
+    """
     from clinic_ops_copilot.agents.triage import build_triage_agent
     from clinic_ops_copilot.observability.tracing import new_trace_id
 
@@ -227,34 +184,9 @@ def chat(
     trace = new_trace_id()
     console.print(f"[dim]trace: {trace}[/dim]\n")
 
-    triage = build_triage_agent()
-    console.print("[cyan]→ triage[/cyan]")
-    triage_result = triage.run(intent, trace_id=trace)
+    assistant = build_triage_agent()
+    result = assistant.run(intent, trace_id=trace)
 
-    if triage_result.error:
-        console.print(f"[red]Triage error:[/red] {triage_result.error}")
-        sys.exit(1)
-
-    console.print(triage_result.final_text)
-
-    # Find routing decision from triage tool calls
-    target = None
-    for tc in triage_result.tool_calls:
-        if tc.get("tool") == "route_to_agent":
-            target = tc.get("output", {}).get("target")
-            break
-
-    if not target or target == "human":
-        return  # escalation or unrouted — triage handled it
-
-    target_reg = registry.get(target)
-    if not target_reg:
-        console.print(f"[yellow]No agent registered for '{target}'[/yellow]")
-        return
-
-    agent = target_reg.factory()
-    console.print(f"\n[cyan]→ {target}[/cyan]")
-    result = agent.run(intent, trace_id=trace)
     if result.error:
         console.print(f"[red]Error:[/red] {result.error}")
         sys.exit(1)

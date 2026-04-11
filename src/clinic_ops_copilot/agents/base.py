@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -32,6 +33,12 @@ from clinic_ops_copilot.observability.tracing import get_logger, new_trace_id
 from clinic_ops_copilot.storage.events import record_event
 
 log = get_logger(__name__)
+
+# Context variable used by delegate tools to propagate the parent agent's
+# trace_id into nested sub-agent runs. The master agent sets this in run(),
+# delegate tools read it when calling sub-agents, so every nested event ends
+# up under the same trace in the events store.
+current_trace_id: ContextVar[str | None] = ContextVar("current_trace_id", default=None)
 
 
 @dataclass
@@ -169,6 +176,9 @@ class Agent:
             messages.extend(prior_messages)
         messages.append({"role": "user", "content": user_message})
 
+        # Expose trace_id to delegate tools via contextvar so they propagate
+        # it into nested sub-agent runs.
+        trace_token = current_trace_id.set(trace)
         try:
             for _iteration in range(self.max_iterations):
                 t0 = time.perf_counter()
@@ -266,6 +276,8 @@ class Agent:
             result.error = str(e)
             record_event(trace, self.name, "exception", "error", payload={"error": str(e)})
             log.exception("agent_failed", agent=self.name, trace_id=trace)
+        finally:
+            current_trace_id.reset(trace_token)
 
         record_event(trace, self.name, "agent_end", "ok" if result.error is None else "error")
         return result

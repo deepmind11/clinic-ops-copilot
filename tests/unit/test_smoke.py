@@ -113,11 +113,34 @@ def test_triage_tools_schema() -> None:
 
 
 def test_triage_agent_builds() -> None:
+    """Master agent should expose one delegate tool per registered sub-agent
+    plus the escalate_to_human tool."""
+    from clinic_ops_copilot.agents.registry import AgentRegistry, registry
+    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
     from clinic_ops_copilot.agents.triage import build_triage_agent
 
-    agent = build_triage_agent()
-    assert agent.name == "triage"
-    assert len(agent.tools) == 3
+    # Fresh registry state for a deterministic tool count. The module-level
+    # ``registry`` singleton may be populated from earlier tests; swap in a
+    # clean one for the scope of this test.
+    original = registry._agents
+    try:
+        registry._agents = {}
+        registry.register("scheduler", "test", build_scheduler_agent)
+
+        agent = build_triage_agent()
+        assert agent.name == "triage"
+
+        tool_names = {t["name"] for t in agent.tools}
+        assert "delegate_to_scheduler" in tool_names
+        assert "escalate_to_human" in tool_names
+        assert "delegate_to_scheduler" in agent.tool_funcs
+        assert "escalate_to_human" in agent.tool_funcs
+
+        # Also verify the fresh AgentRegistry class can stand alone
+        fresh = AgentRegistry()
+        assert fresh.names() == []
+    finally:
+        registry._agents = original
 
 
 def test_triage_classification_english() -> None:

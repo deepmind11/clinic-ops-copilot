@@ -120,7 +120,7 @@ def render() -> None:
 
     if df.empty:
         st.info(
-            "No events recorded yet. Run an agent (e.g. `clinicops serve` then POST to /agents/scheduler) to populate the dashboard."
+            "No events recorded yet. Run `clinicops` (interactive session) or `clinicops eval` to populate the dashboard."
         )
         return
 

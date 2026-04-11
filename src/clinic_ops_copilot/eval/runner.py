@@ -158,8 +158,11 @@ def _build_agent(name: str) -> Any:
 
         return build_eligibility_agent()
     if name == "triage":
+        from clinic_ops_copilot.agents.registry import register_builtins
         from clinic_ops_copilot.agents.triage import build_triage_agent
 
+        # Master needs built-ins registered so its delegate tools exist
+        register_builtins()
         return build_triage_agent()
     raise ValueError(f"unknown agent {name!r}")
 

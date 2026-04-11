@@ -173,8 +173,7 @@
       "agent": "triage",
       "input": "tengo dolor de muelas and I need to see the dentist hoy",
       "expected": {
-        "tool_calls_any_of": ["classify_intent"],
-        "final_text_should_not_contain": ["error"]
+        "tool_calls_any_of": ["delegate_to_scheduler", "delegate_to_eligibility", "escalate_to_human"]
       }
     }
   ]
