@@ -13,17 +13,15 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from clinic_ops_copilot.agents.base import Agent
+from clinic_ops_copilot.agents.base import Agent
 
 
 @dataclass
 class AgentRegistration:
     name: str
     description: str
-    factory: Callable[[], "Agent"]
+    factory: Callable[[], Agent]
     intent_keywords: dict[str, list[str]] = field(default_factory=dict)
 
 
@@ -37,7 +35,7 @@ class AgentRegistry:
         self,
         name: str,
         description: str,
-        factory: Callable[[], "Agent"],
+        factory: Callable[[], Agent],
         intent_keywords: dict[str, list[str]] | None = None,
     ) -> None:
         """Register an agent by name."""

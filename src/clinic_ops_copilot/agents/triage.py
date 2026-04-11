@@ -14,7 +14,6 @@ automatically visible to Triage without any code changes.
 from __future__ import annotations
 
 from clinic_ops_copilot.agents.base import Agent
-from clinic_ops_copilot.tools.triage_tools import TRIAGE_TOOL_FUNCS, TRIAGE_TOOLS
 
 # ---------------------------------------------------------------------------
 # System prompt template — {agent_list} is filled in at build time
