@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup and Usage Questions
+    url: https://github.com/deepmind11/clinic-ops-copilot/blob/main/docs/QUICKSTART.md
+    about: Check the quickstart guide before opening an issue.

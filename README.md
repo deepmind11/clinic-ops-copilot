@@ -1,8 +1,8 @@
 # ClinicOps Copilot
 
-> Multi-agent AI system for clinic operations over a FHIR R4 database, with first-class observability and a deployable CLI.
+[![CI](https://github.com/deepmind11/clinic-ops-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/deepmind11/clinic-ops-copilot/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
-**License:** MIT
+> Multi-agent AI system for clinic operations over a FHIR R4 database, with first-class observability and a deployable CLI.
 
 ---
 
