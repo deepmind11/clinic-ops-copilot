@@ -61,6 +61,53 @@ def _to_openai_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _consume_stream(
+    stream: Any,
+    on_text_chunk: Callable[[str], None] | None,
+) -> tuple[str | None, list[dict[str, str]], str | None]:
+    """Consume an OpenAI streaming response into (content, tool_calls, finish_reason).
+
+    Text deltas are forwarded to ``on_text_chunk`` as they arrive so callers can
+    render streaming output. Tool call fragments accumulate by index and are
+    returned once the stream completes.
+    """
+    content_parts: list[str] = []
+    tool_calls_by_index: dict[int, dict[str, str]] = {}
+    finish_reason: str | None = None
+
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+        choice = chunk.choices[0]
+        delta = choice.delta
+
+        if delta.content:
+            content_parts.append(delta.content)
+            if on_text_chunk is not None:
+                on_text_chunk(delta.content)
+
+        if delta.tool_calls:
+            for tc_delta in delta.tool_calls:
+                idx = tc_delta.index
+                tc = tool_calls_by_index.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                if tc_delta.id:
+                    tc["id"] = tc_delta.id
+                if tc_delta.function is not None:
+                    if tc_delta.function.name:
+                        tc["name"] += tc_delta.function.name
+                    if tc_delta.function.arguments:
+                        tc["arguments"] += tc_delta.function.arguments
+
+        if choice.finish_reason:
+            finish_reason = choice.finish_reason
+
+    content: str | None = "".join(content_parts) if content_parts else None
+    tool_calls: list[dict[str, str]] = [
+        tool_calls_by_index[idx] for idx in sorted(tool_calls_by_index.keys())
+    ]
+    return content, tool_calls, finish_reason
+
+
 class Agent:
     """Generic LLM agent with a tool-use loop and observability."""
 
@@ -94,11 +141,16 @@ class Agent:
         user_message: str,
         trace_id: str | None = None,
         prior_messages: list[dict[str, Any]] | None = None,
+        on_text_chunk: Callable[[str], None] | None = None,
     ) -> AgentResult:
         """Run the tool-use loop until the model returns a final answer.
 
         Pass ``prior_messages`` to continue an existing conversation — the agent
         will see the full history before the current user message.
+
+        Pass ``on_text_chunk`` to receive streaming text deltas as the model
+        generates them. The full accumulated text is also returned in
+        ``result.final_text`` for callers that don't need streaming.
         """
         if self.client is None:
             return AgentResult(
@@ -120,16 +172,17 @@ class Agent:
         try:
             for _iteration in range(self.max_iterations):
                 t0 = time.perf_counter()
-                response = self.client.chat.completions.create(
+                stream = self.client.chat.completions.create(
                     model=self.model,
                     max_tokens=2048,
                     messages=messages,  # type: ignore[arg-type]
                     tools=self.openai_tools,  # type: ignore[arg-type]
                     tool_choice="auto",
+                    stream=True,
                 )
+
+                content, tool_call_list, finish_reason = _consume_stream(stream, on_text_chunk)
                 latency_ms = int((time.perf_counter() - t0) * 1000)
-                choice = response.choices[0]
-                finish_reason = choice.finish_reason
                 record_event(
                     trace,
                     self.name,
@@ -139,31 +192,30 @@ class Agent:
                     payload={"finish_reason": finish_reason},
                 )
 
-                msg = choice.message
                 # Echo the assistant turn back into the conversation. OpenAI's
                 # chat format requires the full message (content + tool_calls).
                 assistant_turn: dict[str, Any] = {
                     "role": "assistant",
-                    "content": msg.content,
+                    "content": content,
                 }
-                if msg.tool_calls:
+                if tool_call_list:
                     assistant_turn["tool_calls"] = [
                         {
-                            "id": tc.id,
+                            "id": tc["id"],
                             "type": "function",
                             "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
+                                "name": tc["name"],
+                                "arguments": tc["arguments"],
                             },
                         }
-                        for tc in msg.tool_calls
+                        for tc in tool_call_list
                     ]
                 messages.append(assistant_turn)
 
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
+                if tool_call_list:
+                    for tc in tool_call_list:
                         try:
-                            tool_args = json.loads(tc.function.arguments or "{}")
+                            tool_args = json.loads(tc["arguments"] or "{}")
                         except json.JSONDecodeError as e:
                             tool_args = {}
                             record_event(
@@ -171,14 +223,14 @@ class Agent:
                                 self.name,
                                 "tool_args_decode_error",
                                 "error",
-                                tool_name=tc.function.name,
-                                payload={"raw": tc.function.arguments, "error": str(e)},
+                                tool_name=tc["name"],
+                                payload={"raw": tc["arguments"], "error": str(e)},
                             )
 
-                        tool_output = self._dispatch_tool(tc.function.name, tool_args, trace)
+                        tool_output = self._dispatch_tool(tc["name"], tool_args, trace)
                         result.tool_calls.append(
                             {
-                                "tool": tc.function.name,
+                                "tool": tc["name"],
                                 "input": tool_args,
                                 "output": tool_output,
                             }
@@ -186,14 +238,14 @@ class Agent:
                         messages.append(
                             {
                                 "role": "tool",
-                                "tool_call_id": tc.id,
+                                "tool_call_id": tc["id"],
                                 "content": json.dumps(tool_output, default=str),
                             }
                         )
                     continue
 
                 if finish_reason in ("stop", "end_turn", None):
-                    result.final_text = msg.content or ""
+                    result.final_text = content or ""
                     break
 
                 # Unexpected finish reason

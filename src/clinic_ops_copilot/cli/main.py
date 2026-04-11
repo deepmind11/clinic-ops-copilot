@@ -38,7 +38,12 @@ def default(ctx: typer.Context) -> None:
 def _run_repl() -> None:
     """Interactive REPL with in-session conversation memory."""
     import logging
+    from pathlib import Path
 
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+    from prompt_toolkit.formatted_text import ANSI
+    from prompt_toolkit.history import FileHistory
     from rich.panel import Panel
 
     from clinic_ops_copilot.agents.registry import registry
@@ -56,11 +61,22 @@ def _run_repl() -> None:
     triage = build_triage_agent()
     trace = new_trace_id()
 
+    # prompt_toolkit session: persistent history across REPL sessions,
+    # up-arrow recall, ctrl-r reverse search, inline autosuggest.
+    history_path = Path.home() / ".clinicops_history"
+    session: PromptSession[str] = PromptSession(
+        history=FileHistory(str(history_path)),
+        auto_suggest=AutoSuggestFromHistory(),
+    )
+    # ANSI-styled prompt (prompt_toolkit doesn't use rich markup)
+    prompt_text = ANSI("\x1b[1;36myou\x1b[0m \x1b[2m▶\x1b[0m ")
+
     console.print(
         Panel(
             "[bold cyan]ClinicOps Copilot[/bold cyan]\n"
             "[dim]Describe what you need and I'll route you to the right team.\n"
-            "Type [bold]exit[/bold] or press [bold]ctrl+c[/bold] to quit.[/dim]"
+            "Type [bold]exit[/bold] or press [bold]ctrl+c[/bold] to quit.\n"
+            "Up/down arrows recall history · ctrl+r reverse search[/dim]"
             + (f"\n[dim]plugins: {', '.join(loaded)}[/dim]" if loaded else ""),
             border_style="cyan",
             padding=(0, 1),
@@ -75,9 +91,16 @@ def _run_repl() -> None:
     session_history: list[dict] = []
     agent_histories: dict[str, list[dict]] = {}
 
+    # Stream handler: print agent text as it arrives. We write directly to
+    # the underlying file so rich's markup parsing doesn't choke on partial
+    # tokens and user-generated text.
+    def stream_chunk(text: str) -> None:
+        console.file.write(text)
+        console.file.flush()
+
     while True:
         try:
-            user_input = console.input("[bold cyan]you[/bold cyan] [dim]▶[/dim] ").strip()
+            user_input = session.prompt(prompt_text).strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]bye[/dim]")
             break
@@ -117,13 +140,17 @@ def _run_repl() -> None:
         console.print(f"[dim]→ {target}[/dim]")
 
         agent_history = agent_histories.setdefault(target, [])
-        result = agent.run(user_input, trace_id=trace, prior_messages=agent_history)
+        result = agent.run(
+            user_input,
+            trace_id=trace,
+            prior_messages=agent_history,
+            on_text_chunk=stream_chunk,
+        )
+        console.print()  # newline after streamed output
 
         if result.error:
             console.print(f"[red]Error:[/red] {result.error}")
             continue
-
-        console.print(result.final_text)
 
         # Update both histories
         turn = [
