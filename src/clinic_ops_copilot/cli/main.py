@@ -1,8 +1,7 @@
 """ClinicOps CLI entry point.
 
-The single surface a Forward Deployed Engineer uses on the ground:
 - `clinicops seed`       -- populate Postgres with synthetic FHIR data
-- `clinicops serve`      -- start the FastAPI gateway
+- `clinicops chat`       -- send an intent through triage and the appropriate agent
 - `clinicops dashboard`  -- open the Streamlit observability dashboard
 - `clinicops eval`       -- run the golden eval harness
 - `clinicops logs`       -- tail recent agent decisions from the events store
@@ -40,21 +39,52 @@ def seed(
 
 
 @app.command()
-def serve(
-    host: str = typer.Option(None, "--host", "-h"),
-    port: int = typer.Option(None, "--port", "-p"),
+def chat(
+    intent: str = typer.Argument(..., help="Clinical intent to process"),
 ) -> None:
-    """Start the FastAPI gateway and the agents."""
-    import uvicorn
+    """Send an intent through triage and the appropriate downstream agent."""
+    from clinic_ops_copilot.agents.eligibility import build_eligibility_agent
+    from clinic_ops_copilot.agents.scheduler import build_scheduler_agent
+    from clinic_ops_copilot.agents.triage import build_triage_agent
+    from clinic_ops_copilot.observability.tracing import new_trace_id
 
     configure_logging(settings.log_level)
     init_events_db()
-    uvicorn.run(
-        "clinic_ops_copilot.api.main:app",
-        host=host or settings.api_host,
-        port=port or settings.api_port,
-        reload=False,
-    )
+    trace = new_trace_id()
+
+    console.print(f"[dim]trace: {trace}[/dim]\n")
+
+    triage = build_triage_agent()
+    console.print("[cyan]→ triage[/cyan]")
+    triage_result = triage.run(intent, trace_id=trace)
+
+    if triage_result.error:
+        console.print(f"[red]Triage error:[/red] {triage_result.error}")
+        sys.exit(1)
+
+    console.print(triage_result.final_text)
+
+    # Find routing decision from triage tool calls
+    target = None
+    for tc in triage_result.tool_calls:
+        if tc.get("tool") == "route_to_agent":
+            target = tc.get("output", {}).get("target")
+            break
+
+    if target == "scheduler":
+        agent = build_scheduler_agent()
+        console.print("\n[cyan]→ scheduler[/cyan]")
+    elif target == "eligibility":
+        agent = build_eligibility_agent()
+        console.print("\n[cyan]→ eligibility[/cyan]")
+    else:
+        return  # triage handled it (escalation or unrouted)
+
+    result = agent.run(intent, trace_id=trace)
+    if result.error:
+        console.print(f"[red]Error:[/red] {result.error}")
+        sys.exit(1)
+    console.print(result.final_text)
 
 
 @app.command()
@@ -172,7 +202,7 @@ def healthcheck() -> None:
     console.print(f"Postgres: {'[green]ok[/green]' if db_ok else '[red]unreachable[/red]'}")
     console.print("Events store: [green]ok[/green]")
     console.print(
-        f"Anthropic API key: {'[green]set[/green]' if settings.anthropic_api_key else '[red]missing[/red]'}"
+        f"OpenRouter API key: {'[green]set[/green]' if settings.openrouter_api_key else '[red]missing[/red]'}"
     )
     sys.exit(0 if db_ok else 1)
 

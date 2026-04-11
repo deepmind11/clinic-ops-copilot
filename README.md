@@ -89,8 +89,8 @@ export OPENROUTER_API_KEY=sk-or-v1-...
 docker compose up -d
 clinicops seed --patients 1000
 
-# Run the agents
-clinicops serve
+# Send an intent through triage and the appropriate agent
+clinicops chat "I need to book a cleaning next Tuesday at 2pm"
 
 # Open the observability dashboard
 clinicops dashboard

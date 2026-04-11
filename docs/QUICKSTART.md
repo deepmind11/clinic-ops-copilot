@@ -6,7 +6,7 @@
 
 - Python 3.11+
 - Docker + Docker Compose
-- An Anthropic API key (`ANTHROPIC_API_KEY` env var)
+- An OpenRouter API key (`OPENROUTER_API_KEY` env var). The project talks to OpenRouter via the OpenAI SDK and defaults to `anthropic/claude-sonnet-4.5`.
 - [uv](https://github.com/astral-sh/uv) for package management
 
 ## Setup
@@ -19,8 +19,11 @@ cd clinic-ops-copilot
 # Install dependencies
 uv sync
 
-# Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
+# Set your OpenRouter API key (single LLM provider; OpenAI-compatible API)
+export OPENROUTER_API_KEY=sk-or-v1-...
+# Optional overrides:
+# export OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
+# export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Start Postgres
 docker compose up -d
@@ -40,22 +43,10 @@ This downloads Synthea, generates 1000 synthetic patients with appointments and 
 ## Run the Agents
 
 ```bash
-clinicops serve
+clinicops chat "tengo dolor de muelas y necesito ver al dentista hoy"
 ```
 
-Starts the FastAPI gateway on `http://localhost:8000`. Each agent is exposed at:
-
-- `POST http://localhost:8000/agents/scheduler`
-- `POST http://localhost:8000/agents/eligibility`
-- `POST http://localhost:8000/agents/triage`
-
-Try a request:
-
-```bash
-curl -X POST http://localhost:8000/agents/triage \
-  -H "Content-Type: application/json" \
-  -d '{"intent": "tengo dolor de muelas y necesito ver al dentista hoy"}'
-```
+Triage classifies the intent, picks the right downstream agent, and runs it in-process. The full trace is written to the events store.
 
 ## Open the Observability Dashboard
 

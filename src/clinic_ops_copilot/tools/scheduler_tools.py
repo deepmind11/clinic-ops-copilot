@@ -1,8 +1,9 @@
 """Tool surface for the Scheduler agent.
 
-Each function corresponds to an Anthropic tool the LLM can call. The tool
-schemas are exposed via ``SCHEDULER_TOOLS`` for the agent runner to pass
-into the messages.create call.
+Each function corresponds to a tool the LLM can call. The tool schemas
+are authored in the Anthropic shape (``name``, ``description``,
+``input_schema``) and converted to the OpenAI ``functions`` shape by the
+agent runner before being sent to OpenRouter.
 """
 
 from __future__ import annotations

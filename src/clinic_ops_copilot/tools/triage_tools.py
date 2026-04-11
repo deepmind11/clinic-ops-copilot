@@ -186,12 +186,12 @@ def classify_intent(text: str) -> dict[str, Any]:
 
 
 def route_to_agent(intent_class: str) -> dict[str, Any]:
-    """Resolve an intent_class to a downstream agent endpoint."""
+    """Resolve an intent_class to a downstream agent."""
     routes = {
-        "scheduling": "/agents/scheduler",
-        "eligibility": "/agents/eligibility",
-        "billing": "/agents/billing",  # Phase 2
-        "escalation": "human:front_desk",
+        "scheduling": "scheduler",
+        "eligibility": "eligibility",
+        "billing": "billing",  # Phase 2
+        "escalation": "human",
     }
     target = routes.get(intent_class)
     if target is None:

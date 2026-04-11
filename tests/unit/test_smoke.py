@@ -18,8 +18,9 @@ def test_cli_app_loads() -> None:
 def test_config_loads() -> None:
     from clinic_ops_copilot.config import settings
 
-    assert settings.anthropic_model.startswith("claude-")
-    assert settings.api_port > 0
+    # Default points at OpenRouter; model id is namespaced (e.g. "anthropic/claude-...")
+    assert "/" in settings.openrouter_model
+    assert settings.openrouter_base_url.startswith("https://openrouter.ai")
 
 
 def test_scheduler_tools_schema() -> None:
@@ -157,8 +158,8 @@ def test_triage_classification_emergency() -> None:
 def test_triage_route() -> None:
     from clinic_ops_copilot.tools.triage_tools import route_to_agent
 
-    assert route_to_agent("scheduling")["target"] == "/agents/scheduler"
-    assert route_to_agent("eligibility")["target"] == "/agents/eligibility"
+    assert route_to_agent("scheduling")["target"] == "scheduler"
+    assert route_to_agent("eligibility")["target"] == "eligibility"
     assert route_to_agent("billing")["available_in_phase_1"] is False
     assert route_to_agent("nonsense")["routed"] is False
 

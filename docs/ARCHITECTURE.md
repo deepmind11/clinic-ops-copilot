@@ -17,22 +17,12 @@ ClinicOps Copilot is designed for real-world clinic operations deployment. These
 The single entry point for managing the system. Subcommands:
 
 - `clinicops seed --patients N` -- generate synthetic patients via Synthea, load into Postgres
-- `clinicops serve` -- start the FastAPI gateway and the agents
+- `clinicops chat "<intent>"` -- run an intent through triage and the appropriate downstream agent
 - `clinicops dashboard` -- open the Streamlit observability dashboard
 - `clinicops eval` -- run the 20 golden test cases, write pass/fail to events store
 - `clinicops logs --agent scheduler --since 1h` -- tail recent agent decisions
 
-The CLI is built with Typer for ergonomics and tab completion.
-
-### FastAPI Gateway
-
-A thin HTTP layer in front of the agents. One POST endpoint per agent:
-
-- `POST /agents/scheduler` -- `{ "intent": "book a cleaning next Tuesday at 2pm" }`
-- `POST /agents/eligibility` -- `{ "patient_id": "...", "service_code": "D1110" }`
-- `POST /agents/triage` -- `{ "intent": "tengo dolor de muelas y necesito ver al dentista hoy" }`
-
-Each request is assigned a `trace_id` that propagates through every tool call and lands in the events store.
+The CLI is built with Typer for ergonomics and tab completion. Agents are invoked directly in-process — no HTTP layer.
 
 ### Agents (OpenAI SDK pointed at OpenRouter, custom tool-use loop)
 
@@ -101,13 +91,13 @@ Run with `clinicops eval`. Pass/fail is written to the events store and surfaced
 
 User intent: *"tengo dolor de muelas y necesito ver al dentista hoy"*
 
-1. POST to `/agents/triage` with the Spanish intent
+1. `clinicops chat "<intent>"` starts a trace and runs the Triage agent in-process
 2. Triage agent calls `classify_intent` tool, gets back `{"class": "scheduling", "urgency": "high", "language": "es"}`
-3. Triage agent calls `route_to_agent("scheduling")`, returns routing decision
-4. FastAPI gateway forwards the original intent to `/agents/scheduler`
+3. Triage agent calls `route_to_agent("scheduling")`, returns `{"target": "scheduler"}`
+4. CLI reads the routing decision and runs the Scheduler agent in-process with the same trace_id
 5. Scheduler agent calls `find_open_slots(provider_id=any_dentist, date_range=today)`
 6. Scheduler agent calls `book_appointment(...)` for the first available slot
-7. Final response returned to user with appointment confirmation
+7. Final response printed to the terminal
 8. Every tool call logged to the events store with trace_id linking the chain
 9. Streamlit dashboard shows the full trace under "Recent decisions"
 

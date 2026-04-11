@@ -6,8 +6,8 @@ Two execution modes per case:
   asserts on the structured return. These run in CI without API keys or
   Postgres, and they form the contract layer for the agent's tool surface.
 
-* ``agent`` -- invokes the actual Anthropic-backed agent over its tool
-  surface. Requires ``ANTHROPIC_API_KEY`` and a seeded Postgres for
+* ``agent`` -- invokes the actual LLM-backed agent (OpenRouter) over its
+  tool surface. Requires ``OPENROUTER_API_KEY`` and a seeded Postgres for
   scheduler/eligibility cases. If the prerequisites are missing, agent-mode
   cases are SKIPPED rather than failing, so CI stays green.
 
@@ -165,14 +165,14 @@ def _build_agent(name: str) -> Any:
 
 
 def _run_agent_case(case: dict[str, Any]) -> CaseResult:
-    if not settings.anthropic_api_key:
+    if not settings.openrouter_api_key:
         return CaseResult(
             case_id=case["id"],
             tags=case.get("tags", []),
             mode="agent",
             passed=False,
             skipped=True,
-            detail="ANTHROPIC_API_KEY not set",
+            detail="OPENROUTER_API_KEY not set",
         )
 
     try:

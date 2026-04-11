@@ -19,19 +19,16 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Anthropic
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-5-20250929"
+    # OpenRouter (LLM provider, OpenAI-compatible API)
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "anthropic/claude-sonnet-4.5"
 
     # Postgres (operational FHIR database)
     database_url: str = "postgresql://clinicops:clinicops_dev@localhost:5433/clinic_ops"
 
     # SQLite events store (observability)
     events_db_path: str = "events.db"
-
-    # API server
-    api_host: str = "127.0.0.1"
-    api_port: int = 8000
 
     # Logging
     log_level: str = "INFO"

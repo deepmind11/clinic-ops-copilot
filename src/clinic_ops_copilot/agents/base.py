@@ -1,21 +1,28 @@
-"""Shared agent runner built on the Anthropic SDK.
+"""Shared agent runner built on the OpenAI SDK pointed at OpenRouter.
 
-We deliberately use the anthropic Python SDK directly rather than a higher-
-level agent framework. The SDK's tool-use loop is stable, well-documented,
-and gives us full control over observability instrumentation. Each agent
-just supplies a system prompt, a tool schema list, and a tool dispatch
-table; the runner handles the rest.
+We deliberately use the openai Python SDK directly (against OpenRouter's
+OpenAI-compatible /v1 endpoint) rather than a higher-level agent framework.
+The SDK's tool-use loop is stable, well-documented, and gives us full
+control over observability instrumentation. Each agent supplies a system
+prompt, a tool schema list, and a tool dispatch table; the runner handles
+the rest.
+
+Tool schemas are authored in the Anthropic shape (``name``, ``description``,
+``input_schema``) because that is the most compact format and the one the
+agents are tested against. ``_to_openai_tools`` converts to the OpenAI
+``functions`` shape at the boundary so the rest of the codebase stays
+provider-agnostic.
 """
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from anthropic import Anthropic
-from anthropic.types import Message, MessageParam, ToolUseBlock
+from openai import OpenAI
 
 from clinic_ops_copilot.config import settings
 from clinic_ops_copilot.observability.tracing import get_logger, new_trace_id
@@ -36,8 +43,23 @@ class AgentResult:
     error: str | None = None
 
 
+def _to_openai_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert Anthropic-shaped tool schemas to OpenAI ``functions`` schemas."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        }
+        for t in tools
+    ]
+
+
 class Agent:
-    """Generic Claude agent with tool-use loop and observability."""
+    """Generic LLM agent with a tool-use loop and observability."""
 
     def __init__(
         self,
@@ -51,11 +73,17 @@ class Agent:
         self.name = name
         self.system_prompt = system_prompt
         self.tools = tools
+        self.openai_tools = _to_openai_tools(tools)
         self.tool_funcs = tool_funcs
-        self.model = model or settings.anthropic_model
+        self.model = model or settings.openrouter_model
         self.max_iterations = max_iterations
         self.client = (
-            Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
+            OpenAI(
+                api_key=settings.openrouter_api_key,
+                base_url=settings.openrouter_base_url,
+            )
+            if settings.openrouter_api_key
+            else None
         )
 
     def run(self, user_message: str, trace_id: str | None = None) -> AgentResult:
@@ -65,77 +93,106 @@ class Agent:
                 trace_id=trace_id or "no-trace",
                 agent=self.name,
                 final_text="",
-                error="ANTHROPIC_API_KEY not set",
+                error="OPENROUTER_API_KEY not set",
             )
 
         trace = trace_id or new_trace_id()
         result = AgentResult(trace_id=trace, agent=self.name, final_text="")
         record_event(trace, self.name, "agent_start", "ok", payload={"user": user_message})
 
-        messages: list[MessageParam] = [{"role": "user", "content": user_message}]
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": user_message},
+        ]
 
         try:
             for _iteration in range(self.max_iterations):
                 t0 = time.perf_counter()
-                response: Message = self.client.messages.create(
+                response = self.client.chat.completions.create(
                     model=self.model,
                     max_tokens=2048,
-                    system=self.system_prompt,
-                    tools=self.tools,  # type: ignore[arg-type]
-                    messages=messages,
+                    messages=messages,  # type: ignore[arg-type]
+                    tools=self.openai_tools,  # type: ignore[arg-type]
+                    tool_choice="auto",
                 )
                 latency_ms = int((time.perf_counter() - t0) * 1000)
+                choice = response.choices[0]
+                finish_reason = choice.finish_reason
                 record_event(
                     trace,
                     self.name,
                     "llm_call",
                     "ok",
                     latency_ms=latency_ms,
-                    payload={"stop_reason": response.stop_reason},
+                    payload={"finish_reason": finish_reason},
                 )
 
-                # Append assistant turn (full content blocks, not just text)
-                messages.append({"role": "assistant", "content": response.content})  # type: ignore[typeddict-item]
-
-                if response.stop_reason == "end_turn":
-                    text_parts = [
-                        b.text for b in response.content if getattr(b, "type", None) == "text"
+                msg = choice.message
+                # Echo the assistant turn back into the conversation. OpenAI's
+                # chat format requires the full message (content + tool_calls).
+                assistant_turn: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": msg.content,
+                }
+                if msg.tool_calls:
+                    assistant_turn["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in msg.tool_calls
                     ]
-                    result.final_text = "\n".join(text_parts)
-                    break
+                messages.append(assistant_turn)
 
-                if response.stop_reason == "tool_use":
-                    tool_results = []
-                    for block in response.content:
-                        if not isinstance(block, ToolUseBlock):
-                            continue
-                        tool_result = self._dispatch_tool(block, trace)
+                if msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        try:
+                            tool_args = json.loads(tc.function.arguments or "{}")
+                        except json.JSONDecodeError as e:
+                            tool_args = {}
+                            record_event(
+                                trace,
+                                self.name,
+                                "tool_args_decode_error",
+                                "error",
+                                tool_name=tc.function.name,
+                                payload={"raw": tc.function.arguments, "error": str(e)},
+                            )
+
+                        tool_output = self._dispatch_tool(tc.function.name, tool_args, trace)
                         result.tool_calls.append(
                             {
-                                "tool": block.name,
-                                "input": block.input,
-                                "output": tool_result,
+                                "tool": tc.function.name,
+                                "input": tool_args,
+                                "output": tool_output,
                             }
                         )
-                        tool_results.append(
+                        messages.append(
                             {
-                                "type": "tool_result",
-                                "tool_use_id": block.id,
-                                "content": str(tool_result),
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": json.dumps(tool_output, default=str),
                             }
                         )
-                    messages.append({"role": "user", "content": tool_results})  # type: ignore[typeddict-item]
                     continue
 
-                # Unexpected stop reason
+                if finish_reason in ("stop", "end_turn", None):
+                    result.final_text = msg.content or ""
+                    break
+
+                # Unexpected finish reason
                 record_event(
                     trace,
                     self.name,
-                    "unexpected_stop",
+                    "unexpected_finish",
                     "error",
-                    payload={"stop_reason": response.stop_reason},
+                    payload={"finish_reason": finish_reason},
                 )
-                result.error = f"unexpected stop_reason: {response.stop_reason}"
+                result.error = f"unexpected finish_reason: {finish_reason}"
                 break
             else:
                 result.error = f"hit max_iterations={self.max_iterations}"
@@ -149,34 +206,35 @@ class Agent:
         record_event(trace, self.name, "agent_end", "ok" if result.error is None else "error")
         return result
 
-    def _dispatch_tool(self, block: ToolUseBlock, trace_id: str) -> Any:
-        func = self.tool_funcs.get(block.name)
+    def _dispatch_tool(
+        self, tool_name: str, tool_args: dict[str, Any], trace_id: str
+    ) -> Any:
+        func = self.tool_funcs.get(tool_name)
         if func is None:
-            err = f"tool not registered: {block.name}"
+            err = f"tool not registered: {tool_name}"
             record_event(
                 trace_id,
                 self.name,
                 "tool_call",
                 "error",
-                tool_name=block.name,
+                tool_name=tool_name,
                 payload={"error": err},
             )
             return {"error": err}
 
         t0 = time.perf_counter()
         try:
-            assert isinstance(block.input, dict)
-            output = func(**block.input)
+            output = func(**tool_args)
             latency_ms = int((time.perf_counter() - t0) * 1000)
             record_event(
                 trace_id,
                 self.name,
                 "tool_call",
                 "ok",
-                tool_name=block.name,
+                tool_name=tool_name,
                 latency_ms=latency_ms,
                 payload={
-                    "input": block.input,
+                    "input": tool_args,
                     "output_keys": list(output.keys()) if isinstance(output, dict) else None,
                 },
             )
@@ -188,8 +246,8 @@ class Agent:
                 self.name,
                 "tool_call",
                 "error",
-                tool_name=block.name,
+                tool_name=tool_name,
                 latency_ms=latency_ms,
-                payload={"input": block.input, "error": str(e)},
+                payload={"input": tool_args, "error": str(e)},
             )
             return {"error": str(e)}
