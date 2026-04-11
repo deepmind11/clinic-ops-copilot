@@ -10,6 +10,35 @@
 
 ClinicOps Copilot is a working multi-agent system where three Claude agents (Scheduler, Eligibility, Triage) operate over a synthetic FHIR R4 patient database, handle real edge cases (booking conflicts, expired coverage, code-switched Spanish intents), and stream every tool call to a Streamlit observability dashboard. A single CLI (`clinicops`) handles seeding, serving, and evals.
 
+## Quick Start
+
+```bash
+# Clone
+git clone https://github.com/deepmind11/clinic-ops-copilot.git
+cd clinic-ops-copilot
+
+# Install
+uv sync
+
+# Configure OpenRouter (single LLM provider; OpenAI-compatible API)
+export OPENROUTER_API_KEY=sk-or-v1-...
+
+# Start Postgres + load synthetic data
+docker compose up -d
+clinicops seed --patients 1000
+
+# Send an intent through triage and the appropriate agent
+clinicops chat "I need to book a cleaning next Tuesday at 2pm"
+
+# Open the observability dashboard
+clinicops dashboard
+
+# Run the eval harness
+clinicops eval
+```
+
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
+
 ## Architecture
 
 ```
@@ -67,38 +96,6 @@ A fourth **Billing/RCM** agent is planned for Phase 2. See [ROADMAP.md](ROADMAP.
 - **Eval harness:** Plain Python + 20 golden test cases (booking conflicts, coverage edge cases, Spanish code-switching)
 - **CI/CD:** GitHub Actions (lint, type check, tests, eval harness on every PR)
 - **Packaging:** uv
-
-## Quick Start (Local)
-
-```bash
-# Clone
-git clone https://github.com/deepmind11/clinic-ops-copilot.git
-cd clinic-ops-copilot
-
-# Install
-uv sync
-
-# Configure OpenRouter (single LLM provider; OpenAI-compatible API)
-export OPENROUTER_API_KEY=sk-or-v1-...
-# Optional overrides:
-# export OPENROUTER_MODEL=anthropic/claude-sonnet-4.5
-# export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-
-# Start Postgres + load synthetic data
-docker compose up -d
-clinicops seed --patients 1000
-
-# Send an intent through triage and the appropriate agent
-clinicops chat "I need to book a cleaning next Tuesday at 2pm"
-
-# Open the observability dashboard
-clinicops dashboard
-
-# Run the eval harness
-clinicops eval
-```
-
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
 
 ## Eval Harness
 
