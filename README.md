@@ -20,20 +20,21 @@ git clone https://github.com/deepmind11/clinic-ops-copilot.git
 cd clinic-ops-copilot
 
 # Install
-uv sync
+uv sync --all-extras
 
-# Configure OpenRouter (single LLM provider; OpenAI-compatible API)
-export OPENROUTER_API_KEY=sk-or-v1-...
+# Configure — copy the example and fill in your OpenRouter key
+cp .env.example .env
+# Edit .env and set OPENROUTER_API_KEY=sk-or-v1-...
 
 # Start Postgres + load synthetic data
 docker compose up -d
-clinicops seed --patients 1000
+uv run clinicops seed --patients 1000
 
 # Send an intent through triage and the appropriate agent
-clinicops chat "I need to book a cleaning next Tuesday at 2pm"
+uv run clinicops chat "I need to book a cleaning next Tuesday at 2pm"
 
 # Open the observability dashboard
-clinicops dashboard
+uv run clinicops dashboard
 
 # Run the eval harness
 clinicops eval
